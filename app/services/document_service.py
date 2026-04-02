@@ -3,6 +3,7 @@ import json
 import shutil
 from pathlib import Path
 
+from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.repositories.chunk_repository import ChunkRepository
 from app.repositories.document_repository import DocumentRepository
@@ -29,7 +30,7 @@ class DocumentService:
         self._embedding_service = embedding_service
         self._docs_dir = docs_dir
 
-    def add_document(self, vehicle_id: int, pdf_path: str, document_type: str = "service_manual"):
+    def add_document(self, vehicle_id: int, pdf_path: str, document_type: str = "service_manual") -> Document:
         source = Path(pdf_path)
         if not source.exists():
             raise FileNotFoundError(f"PDF not found: {pdf_path}")
@@ -44,10 +45,10 @@ class DocumentService:
 
         dest = get_document_path(self._docs_dir, vehicle_id, doc.id, source.name)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, dest)
-        doc.stored_path = str(dest)
 
         try:
+            shutil.copy2(source, dest)
+            doc.stored_path = str(dest)
             pages = self._pdf_service.extract_pages(str(dest))
             raw_chunks = self._chunking_service.chunk_pages(pages)
             texts = [c["content"] for c in raw_chunks]
@@ -70,5 +71,5 @@ class DocumentService:
 
         return doc
 
-    def list_documents(self, vehicle_id: int):
+    def list_documents(self, vehicle_id: int) -> list[Document]:
         return self._doc_repo.list_by_vehicle(vehicle_id)
