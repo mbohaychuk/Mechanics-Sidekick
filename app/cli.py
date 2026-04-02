@@ -206,3 +206,90 @@ def document_list(vehicle_id: int):
             return
         for d in docs:
             console.print(f"  [{d.id}] {d.file_name} — {d.document_type} — {d.processing_status}")
+
+
+def _make_chat_service(session):
+    from app.repositories.vehicle_repository import VehicleRepository
+    from app.repositories.document_repository import DocumentRepository
+    from app.repositories.job_repository import JobRepository
+    from app.repositories.chat_repository import ChatRepository
+    from app.repositories.chunk_repository import ChunkRepository
+    from app.services.ollama_service import OllamaService
+    from app.services.embedding_service import EmbeddingService
+    from app.services.retrieval_service import RetrievalService
+    from app.services.chat_service import ChatService
+
+    ollama_svc = OllamaService(settings.ollama_base_url)
+    embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
+    retrieval_svc = RetrievalService(ChunkRepository(session), embedding_svc, settings.top_k_chunks)
+
+    return ChatService(
+        chat_repo=ChatRepository(session),
+        job_repo=JobRepository(session),
+        vehicle_repo=VehicleRepository(session),
+        doc_repo=DocumentRepository(session),
+        retrieval_service=retrieval_svc,
+        ollama_service=ollama_svc,
+        chat_model=settings.chat_model,
+        recent_messages_limit=settings.recent_messages,
+    )
+
+
+# ── Chat commands ─────────────────────────────────────────────────────────────
+
+@chat_app.command("ask")
+def chat_ask(job_id: int, question: str):
+    """Ask a single question in a job context."""
+    with get_session() as session:
+        svc = _make_chat_service(session)
+        try:
+            with console.status("Thinking...", spinner="dots"):
+                answer, sources = svc.ask(job_id=job_id, question=question)
+        except ValueError as e:
+            print_error(str(e))
+            raise typer.Exit(1)
+        except Exception as e:
+            print_error(f"Error: {e}")
+            raise typer.Exit(1)
+        print_answer(answer, sources)
+
+
+@chat_app.command("start")
+def chat_start(job_id: int):
+    """Start an interactive chat session for a job."""
+    # Validate job exists and capture header info before entering the loop
+    with get_session() as session:
+        job_svc = _make_job_service(session)
+        try:
+            job = job_svc.get_job(job_id)
+            header = f"{job.title} (ID: {job.id})"
+        except ValueError as e:
+            print_error(str(e))
+            raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Job:[/bold cyan] {header}")
+    console.print("[dim]Type your question, or 'quit' to exit.[/dim]\n")
+
+    while True:
+        try:
+            question = typer.prompt("You")
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[dim]Session ended.[/dim]")
+            break
+
+        if question.strip().lower() in ("quit", "exit", "q"):
+            console.print("[dim]Session ended.[/dim]")
+            break
+
+        if not question.strip():
+            continue
+
+        with get_session() as session:
+            svc = _make_chat_service(session)
+            try:
+                with console.status("Thinking...", spinner="dots"):
+                    answer, sources = svc.ask(job_id=job_id, question=question)
+            except Exception as e:
+                print_error(f"Error: {e}")
+                continue
+            print_answer(answer, sources)
