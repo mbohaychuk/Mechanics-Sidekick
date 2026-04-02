@@ -36,5 +36,6 @@ class DocumentRepository:
 
     def update_status(self, doc_id: int, status: str) -> None:
         doc = self.session.get(Document, doc_id)
-        if doc:
-            doc.processing_status = status
+        if doc is None:
+            raise ValueError(f"Document {doc_id} not found")
+        doc.processing_status = status
