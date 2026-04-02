@@ -1,6 +1,6 @@
 # app/db.py
 from sqlalchemy import create_engine, Engine
-from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 
 class Base(DeclarativeBase):
