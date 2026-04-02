@@ -1,3 +1,5 @@
+# app/services/retrieval_service.py
+from app.models.document_chunk import DocumentChunk
 from app.rag.similarity import rank_chunks
 from app.repositories.chunk_repository import ChunkRepository
 from app.services.embedding_service import EmbeddingService
@@ -14,7 +16,7 @@ class RetrievalService:
         self._embedding_service = embedding_service
         self._top_k = top_k
 
-    def retrieve(self, vehicle_id: int, question: str) -> list[tuple]:
+    def retrieve(self, vehicle_id: int, question: str) -> list[tuple[DocumentChunk, float]]:
         """Embed the question, score all vehicle chunks, return top_k."""
         candidates = self._chunk_repo.list_by_vehicle(vehicle_id)
         if not candidates:
