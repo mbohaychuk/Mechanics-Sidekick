@@ -1,4 +1,9 @@
 # app/rag/prompt_builder.py
+"""Build system-prompt and message lists for Ollama /api/chat requests."""
+from app.models.chat_message import ChatMessage
+from app.models.document_chunk import DocumentChunk
+from app.models.job import Job
+from app.models.vehicle import Vehicle
 
 
 def build_system_prompt() -> str:
@@ -19,14 +24,14 @@ def build_system_prompt() -> str:
 
 
 def build_messages(
-    job,
-    vehicle,
-    recent_messages: list,
-    chunks: list[tuple],
+    job: Job,
+    vehicle: Vehicle,
+    recent_messages: list[ChatMessage],
+    chunks: list[tuple[DocumentChunk, float]],
     question: str,
     document_map: dict[int, str],
-) -> list[dict]:
-    messages: list[dict] = [{"role": "system", "content": build_system_prompt()}]
+) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = [{"role": "system", "content": build_system_prompt()}]
 
     job_context = (
         f"Current job: {job.title}\n"
@@ -34,11 +39,11 @@ def build_messages(
     )
     messages.append({"role": "system", "content": job_context})
 
-    context_parts = [
-        f"[{i}] {document_map.get(chunk.document_id, f'document_{chunk.document_id}')}, "
-        f"page {chunk.page_number}:\n{chunk.content}"
-        for i, (chunk, _score) in enumerate(chunks, start=1)
-    ]
+    context_parts = []
+    for i, (chunk, _score) in enumerate(chunks, start=1):
+        page_label = f"page {chunk.page_number}" if chunk.page_number is not None else "page unknown"
+        filename = document_map.get(chunk.document_id, f"document_{chunk.document_id}")
+        context_parts.append(f"[{i}] {filename}, {page_label}:\n{chunk.content}")
     messages.append({"role": "system", "content": "Manual excerpts:\n\n" + "\n\n".join(context_parts)})
 
     for msg in recent_messages:

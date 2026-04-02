@@ -27,9 +27,10 @@ def _make_chunk(content, doc_id=1, page_number=5):
 
 def test_system_prompt_enforces_grounding():
     prompt = build_system_prompt()
-    assert "only" in prompt.lower()
+    assert "answer only using" in prompt.lower()
+    assert "never invent" in prompt.lower()
+    assert "could not find" in prompt.lower()
     assert "cite" in prompt.lower() or "source" in prompt.lower()
-    assert "not" in prompt.lower()  # "do not invent"
 
 
 def test_build_messages_last_message_is_user_question():
