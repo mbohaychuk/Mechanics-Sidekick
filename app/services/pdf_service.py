@@ -8,12 +8,11 @@ class PDFService:
         Returns list of {"page_number": int, "text": str}.
         Pages with no extractable text are omitted.
         """
-        doc = fitz.open(pdf_path)
         pages = []
-        for page_num, page in enumerate(doc, start=1):
-            raw = page.get_text()
-            normalized = " ".join(raw.split())
-            if normalized:
-                pages.append({"page_number": page_num, "text": normalized})
-        doc.close()
+        with fitz.open(pdf_path) as doc:
+            for page_num, page in enumerate(doc, start=1):
+                raw = page.get_text()
+                normalized = " ".join(raw.split())
+                if normalized:
+                    pages.append({"page_number": page_num, "text": normalized})
         return pages
