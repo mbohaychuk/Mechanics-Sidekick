@@ -36,6 +36,8 @@ class ChatService:
         if job is None:
             raise ValueError(f"Job {job_id} not found")
         vehicle = self._vehicle_repo.get_by_id(job.vehicle_id)
+        if vehicle is None:
+            raise ValueError(f"Vehicle {job.vehicle_id} not found for job {job_id}")
 
         # Capture history before saving the current user message
         recent = self._chat_repo.list_by_job(job_id, limit=self._recent_messages_limit)

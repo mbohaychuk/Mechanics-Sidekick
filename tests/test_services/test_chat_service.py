@@ -84,6 +84,12 @@ def test_ask_returns_no_context_message_when_no_chunks(db_session, job_and_vehic
     assert "not find" in answer.lower() or "no" in answer.lower()
     mock_ollama.chat.assert_not_called()
 
+    db_session.flush()
+    messages = ChatRepository(db_session).list_by_job(job.id)
+    assert len(messages) == 2
+    assert messages[0].role == "user"
+    assert messages[1].role == "assistant"
+
 
 def test_ask_raises_when_job_not_found(db_session):
     mock_retrieval = MagicMock(spec=RetrievalService)
