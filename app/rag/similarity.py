@@ -1,8 +1,10 @@
+# app/rag/similarity.py
 import json
 import numpy as np
 
 
 def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
+    """Return cosine similarity in [-1.0, 1.0]; returns 0.0 if either vector is zero."""
     a = np.array(vec_a, dtype=np.float64)
     b = np.array(vec_b, dtype=np.float64)
     denom = np.linalg.norm(a) * np.linalg.norm(b)
