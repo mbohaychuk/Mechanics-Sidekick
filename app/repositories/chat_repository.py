@@ -1,4 +1,5 @@
 # app/repositories/chat_repository.py
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from app.models.chat_message import ChatMessage
 
@@ -19,13 +20,18 @@ class ChatRepository:
         return msg
 
     def list_by_job(self, job_id: int, limit: int | None = None) -> list[ChatMessage]:
-        query = (
+        if limit is not None:
+            rows = (
+                self.session.query(ChatMessage)
+                .filter(ChatMessage.job_id == job_id)
+                .order_by(desc(ChatMessage.id))
+                .limit(limit)
+                .all()
+            )
+            return list(reversed(rows))
+        return (
             self.session.query(ChatMessage)
             .filter(ChatMessage.job_id == job_id)
             .order_by(ChatMessage.id)
+            .all()
         )
-        if limit is not None:
-            total = query.count()
-            offset = max(0, total - limit)
-            query = query.offset(offset)
-        return query.all()
