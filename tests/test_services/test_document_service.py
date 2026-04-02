@@ -78,7 +78,7 @@ def test_add_document_marks_failed_on_embedding_error(db_session, vehicle, sampl
     mock_embedding.embed_texts.side_effect = RuntimeError("Ollama unreachable")
 
     svc = _make_svc(db_session, str(tmp_path / "docs"), mock_embedding)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="Document processing failed"):
         svc.add_document(vehicle_id=vehicle.id, pdf_path=str(sample_pdf))
 
     docs = DocumentRepository(db_session).list_by_vehicle(vehicle.id)
