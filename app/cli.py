@@ -152,3 +152,57 @@ def job_show(job_id: int):
             print_error(str(e))
             raise typer.Exit(1)
         print_job(job)
+
+
+def _make_document_service(session):
+    from app.repositories.document_repository import DocumentRepository
+    from app.repositories.chunk_repository import ChunkRepository
+    from app.services.document_service import DocumentService
+    from app.services.pdf_service import PDFService
+    from app.services.chunking_service import ChunkingService
+    from app.services.embedding_service import EmbeddingService
+    from app.services.ollama_service import OllamaService
+
+    ollama_svc = OllamaService(settings.ollama_base_url)
+    embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
+    return DocumentService(
+        doc_repo=DocumentRepository(session),
+        chunk_repo=ChunkRepository(session),
+        pdf_service=PDFService(),
+        chunking_service=ChunkingService(settings.chunk_size, settings.chunk_overlap),
+        embedding_service=embedding_svc,
+        docs_dir=settings.docs_dir,
+    )
+
+
+# ── Document commands ─────────────────────────────────────────────────────────
+
+@document_app.command("add")
+def document_add(
+    vehicle_id: int,
+    pdf_path: str,
+    doc_type: str = typer.Option("service_manual", "--type", help="Document type label"),
+):
+    """Upload and process a PDF manual for a vehicle."""
+    with get_session() as session:
+        svc = _make_document_service(session)
+        try:
+            with console.status(f"Processing {pdf_path}...", spinner="dots"):
+                doc = svc.add_document(vehicle_id=vehicle_id, pdf_path=pdf_path, document_type=doc_type)
+        except (FileNotFoundError, RuntimeError, ValueError) as e:
+            print_error(str(e))
+            raise typer.Exit(1)
+        print_success(f"Document '{doc.file_name}' processed and ready (ID: {doc.id})")
+
+
+@document_app.command("list")
+def document_list(vehicle_id: int):
+    """List all documents for a vehicle."""
+    with get_session() as session:
+        svc = _make_document_service(session)
+        docs = svc.list_documents(vehicle_id)
+        if not docs:
+            console.print("[dim]No documents found for this vehicle.[/dim]")
+            return
+        for d in docs:
+            console.print(f"  [{d.id}] {d.file_name} — {d.document_type} — {d.processing_status}")
