@@ -19,10 +19,11 @@ app.add_typer(job_app, name="job")
 app.add_typer(chat_app, name="chat")
 
 _engine = None
+_Session = None
 
 
 def _get_engine():
-    global _engine
+    global _engine, _Session
     if _engine is None:
         import app.models  # noqa: F401 — register all models with Base
 
@@ -30,14 +31,14 @@ def _get_engine():
         db_path.parent.mkdir(parents=True, exist_ok=True)
         _engine = get_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(_engine)
+        _Session = get_session_factory(_engine)
     return _engine
 
 
 @contextmanager
 def get_session():
-    engine = _get_engine()
-    Session = get_session_factory(engine)
-    session = Session()
+    _get_engine()  # ensure engine + session factory are initialized
+    session = _Session()
     try:
         yield session
         session.commit()
@@ -69,7 +70,7 @@ def vehicle_add():
     with get_session() as session:
         svc = _make_vehicle_service(session)
         vehicle = svc.add_vehicle(year=year, make=make, model=model, engine=engine, vin=vin, notes=notes)
-        session.flush()
+        session.flush()  # populate vehicle.id before printing (create doesn't flush automatically)
         print_success(f"Vehicle added with ID {vehicle.id}")
         print_vehicle(vehicle)
 
