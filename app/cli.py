@@ -99,3 +99,56 @@ def vehicle_show(vehicle_id: int):
             print_error(str(e))
             raise typer.Exit(1)
         print_vehicle(vehicle)
+
+
+def _make_job_service(session):
+    from app.repositories.vehicle_repository import VehicleRepository
+    from app.repositories.job_repository import JobRepository
+    from app.services.job_service import JobService
+    return JobService(JobRepository(session), VehicleRepository(session))
+
+
+# ── Job commands ──────────────────────────────────────────────────────────────
+
+@job_app.command("add")
+def job_add(vehicle_id: int):
+    """Add a new job for a vehicle."""
+    title = typer.prompt("Job title")
+    description = typer.prompt("Description (optional, Enter to skip)", default="") or None
+
+    with get_session() as session:
+        svc = _make_job_service(session)
+        try:
+            job = svc.add_job(vehicle_id=vehicle_id, title=title, description=description)
+            session.flush()  # populate job.id before printing
+            print_success(f"Job created with ID {job.id}")
+            print_job(job)
+        except ValueError as e:
+            print_error(str(e))
+            raise typer.Exit(1)
+
+
+@job_app.command("list")
+def job_list(vehicle_id: int):
+    """List all jobs for a vehicle."""
+    with get_session() as session:
+        svc = _make_job_service(session)
+        jobs = svc.list_jobs(vehicle_id)
+        if not jobs:
+            console.print("[dim]No jobs found for this vehicle.[/dim]")
+            return
+        for j in jobs:
+            console.print(f"  [{j.id}] {j.title} — {j.status}")
+
+
+@job_app.command("show")
+def job_show(job_id: int):
+    """Show details for a job."""
+    with get_session() as session:
+        svc = _make_job_service(session)
+        try:
+            job = svc.get_job(job_id)
+        except ValueError as e:
+            print_error(str(e))
+            raise typer.Exit(1)
+        print_job(job)
