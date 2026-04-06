@@ -1,5 +1,6 @@
 # app/utils/console.py
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich import box
@@ -45,7 +46,7 @@ def print_job(job) -> None:
 
 def print_answer(answer: str, sources: list[dict]) -> None:
     console.print()
-    console.print(Panel(answer, title="[bold]Answer[/bold]", border_style="green"))
+    console.print(Panel(escape(answer), title="[bold]Answer[/bold]", border_style="green"))
     if sources:
         console.print("[bold dim]Sources:[/bold dim]")
         for i, src in enumerate(sources, start=1):
