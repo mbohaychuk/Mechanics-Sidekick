@@ -12,7 +12,8 @@ from app.repositories.chunk_repository import ChunkRepository
 from app.services.vehicle_service import VehicleService
 from app.services.document_service import DocumentService
 from app.services.pdf_service import PDFService
-from app.services.chunking_service import ChunkingService
+from app.services.structured_chunking_service import StructuredChunkingService
+from app.services.contextualization_service import ContextualizationService
 from app.services.embedding_service import EmbeddingService
 
 
@@ -35,12 +36,22 @@ def sample_pdf(tmp_path) -> Path:
     return path
 
 
-def _make_svc(db_session, docs_dir, mock_embedding):
+def _make_svc(db_session, docs_dir, mock_embedding, mock_contextualization=None):
+    if mock_contextualization is None:
+        mock_contextualization = MagicMock(spec=ContextualizationService)
+        mock_contextualization.generate_context.return_value = "Test context summary."
+
+    mock_chunking = MagicMock(spec=StructuredChunkingService)
+    mock_chunking.chunk_blocks.return_value = [
+        {"chunk_index": 0, "page_number": 1, "section_title": "TEST SECTION", "content": "Torque spec is 129 Nm"}
+    ]
+
     return DocumentService(
         doc_repo=DocumentRepository(db_session),
         chunk_repo=ChunkRepository(db_session),
         pdf_service=PDFService(),
-        chunking_service=ChunkingService(chunk_size=50, chunk_overlap=5),
+        chunking_service=mock_chunking,
+        contextualization_service=mock_contextualization,
         embedding_service=mock_embedding,
         docs_dir=docs_dir,
     )

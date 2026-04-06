@@ -17,20 +17,27 @@ def _make_vehicle(year=2018, make="Ford", model="F-150", engine="5.0L V8"):
     return v
 
 
-def _make_chunk(content, doc_id=1, page_number=5):
+def _make_chunk(content, doc_id=1, page_number=5, context_summary=None, section_title=None):
     c = MagicMock()
     c.content = content
     c.document_id = doc_id
     c.page_number = page_number
+    c.context_summary = context_summary
+    c.section_title = section_title
     return c
 
 
 def test_system_prompt_enforces_grounding():
-    prompt = build_system_prompt()
+    prompt = build_system_prompt(_make_vehicle())
     assert "answer only using" in prompt.lower()
     assert "never invent" in prompt.lower()
     assert "could not find" in prompt.lower()
     assert "cite" in prompt.lower() or "source" in prompt.lower()
+
+
+def test_system_prompt_includes_vehicle_engine():
+    prompt = build_system_prompt(_make_vehicle(engine="4.2L V8"))
+    assert "4.2L V8" in prompt
 
 
 def test_build_messages_last_message_is_user_question():
@@ -71,6 +78,45 @@ def test_build_messages_includes_recent_history():
     )
     contents = [m["content"] for m in messages]
     assert "Previous question" in contents
+
+
+def test_build_messages_includes_context_summary_when_present():
+    chunk = _make_chunk(
+        "Tighten bolts to 23 Nm",
+        context_summary="This chunk covers 4.2L V8 cylinder head torque specs.",
+    )
+    messages = build_messages(
+        _make_job(), _make_vehicle(), [],
+        [(chunk, 0.9)],
+        "Torque?",
+        {1: "manual.pdf"},
+    )
+    full_text = " ".join(m["content"] for m in messages)
+    assert "4.2L V8 cylinder head torque specs" in full_text
+
+
+def test_build_messages_includes_section_title_when_present():
+    chunk = _make_chunk("Tighten bolts to 23 Nm", section_title="CYLINDER HEAD TORQUE SPECS")
+    messages = build_messages(
+        _make_job(), _make_vehicle(), [],
+        [(chunk, 0.9)],
+        "Torque?",
+        {1: "manual.pdf"},
+    )
+    full_text = " ".join(m["content"] for m in messages)
+    assert "CYLINDER HEAD TORQUE SPECS" in full_text
+
+
+def test_build_messages_omits_summary_line_when_none():
+    chunk = _make_chunk("Tighten bolts to 23 Nm", context_summary=None)
+    messages = build_messages(
+        _make_job(), _make_vehicle(), [],
+        [(chunk, 0.9)],
+        "Torque?",
+        {1: "manual.pdf"},
+    )
+    full_text = " ".join(m["content"] for m in messages)
+    assert "Summary:" not in full_text
 
 
 def test_build_messages_has_multiple_system_messages():

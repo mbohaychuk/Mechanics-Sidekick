@@ -12,4 +12,6 @@ class DocumentChunk(Base):
     chunk_index: Mapped[int] = mapped_column()
     page_number: Mapped[int | None] = mapped_column(nullable=True)
     content: Mapped[str] = mapped_column(Text)
+    section_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    context_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
