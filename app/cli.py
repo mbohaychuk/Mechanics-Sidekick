@@ -165,7 +165,7 @@ def _make_document_service(session):
     from app.services.ollama_service import OllamaService
 
     ollama_svc = OllamaService(settings.ollama_base_url)
-    context_svc = ContextualizationService(ollama_svc, settings.chat_model)
+    context_svc = ContextualizationService(ollama_svc, settings.context_model)
     embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
     return DocumentService(
         doc_repo=DocumentRepository(session),
