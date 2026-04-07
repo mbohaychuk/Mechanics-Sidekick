@@ -1,11 +1,13 @@
-from app.config import settings
+from app.config import Settings
 
 
 def test_settings_has_defaults():
-    assert settings.ollama_base_url == "http://localhost:11434"
-    assert settings.chat_model == "gpt-oss:20b"
-    assert settings.embed_model == "qwen3-embedding:4b"
-    assert settings.chunk_size == 1000
-    assert settings.chunk_overlap == 200
-    assert settings.top_k_chunks == 5
-    assert settings.recent_messages == 6
+    s = Settings(_env_file=None)
+    assert s.ollama_base_url == "http://localhost:11434"
+    assert s.chat_model == "gemma4:26b"
+    assert s.context_model == "gemma4:e4b"
+    assert s.embed_model == "qwen3-embedding:4b"
+    assert s.chunk_size == 500
+    assert s.chunk_overlap == 100
+    assert s.top_k_chunks == 5
+    assert s.recent_messages == 6
