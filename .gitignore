@@ -211,3 +211,7 @@ data/app.db
 data/documents/*
 !data/.gitkeep
 !data/documents/.gitkeep
+
+# Local editor config
+CLAUDE.md
+.claude/
