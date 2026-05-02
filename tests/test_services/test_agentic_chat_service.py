@@ -300,3 +300,42 @@ def test_raises_value_error_when_job_missing(db_session):
     svc = _make_service(db_session)
     with pytest.raises(ValueError, match="Job 999 not found"):
         svc.ask(job_id=999, question="q")
+
+
+def test_groundedness_fail_without_claims_uses_reason_in_rewrite_failure(db_session, job_and_vehicle):
+    """When grounded=False but unsupported_claims=[], the rewriter must hear the reason text."""
+    job, _ = job_and_vehicle
+    chunk1 = _make_chunk("text1", page=1)
+    chunk2 = _make_chunk("text2", page=2)
+
+    retrieval = MagicMock(spec=HybridRetrievalService)
+    retrieval.retrieve.side_effect = [[(chunk1, 0.5)], [(chunk2, 0.5)]]
+    reranker = MagicMock(spec=Reranker)
+    reranker.rerank.side_effect = [[(chunk1, 0.5)], [(chunk2, 0.5)]]
+    relevance = MagicMock(spec=RelevanceGrader)
+    relevance.grade.side_effect = [
+        GradingResult(chunk=chunk1, relevant=True, reason="ok"),
+        GradingResult(chunk=chunk2, relevant=True, reason="ok"),
+    ]
+    groundedness = MagicMock(spec=GroundednessGrader)
+    groundedness.grade.side_effect = [
+        GroundednessResult(grounded=False, unsupported_claims=[], reason="answer contradicts context"),
+        GroundednessResult(grounded=True, unsupported_claims=[], reason="ok"),
+    ]
+    rewriter = MagicMock(spec=QueryRewriter)
+    rewriter.rewrite.return_value = RewriteResult(rewritten_query="rw", rationale="r")
+    ollama = MagicMock(spec=OllamaService)
+    ollama.chat.side_effect = ["bad answer", "good answer"]
+    doc_repo = MagicMock(spec=DocumentRepository)
+    doc_repo.get_by_id.return_value = MagicMock(file_name="m.pdf")
+
+    svc = _make_service(
+        db_session, retrieval=retrieval, reranker=reranker, relevance=relevance,
+        groundedness=groundedness, rewriter=rewriter, ollama=ollama, doc_repo=doc_repo,
+    )
+    svc.ask(job_id=job.id, question="q")
+    db_session.flush()
+
+    rewriter.rewrite.assert_called_once()
+    failure_reasons = rewriter.rewrite.call_args.kwargs["prior_failure_reasons"]
+    assert any("answer contradicts context" in r for r in failure_reasons)

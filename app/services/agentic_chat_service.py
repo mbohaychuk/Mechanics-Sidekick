@@ -87,7 +87,7 @@ class AgenticChatService:
 
         for iteration in range(self._max_iterations + 1):
             state.iteration = iteration
-            entry = self._run_iteration(state, vehicle)
+            entry, relevant_chunks = self._run_iteration(state, vehicle)
             state.trace.append(entry)
 
             if entry.relevant_count == 0:
@@ -96,7 +96,6 @@ class AgenticChatService:
                     continue
                 break
 
-            relevant_chunks = self._collect_relevant_chunks(state.trace[-1])
             answer = self._generate_answer(job, vehicle, recent, relevant_chunks, state.original_question)
             entry.generated_answer = answer
 
@@ -112,16 +111,16 @@ class AgenticChatService:
                 )
 
             if iteration < self._max_iterations:
-                self._rewrite_into_state(
-                    state, vehicle,
-                    "groundedness fail: " + ", ".join(grounded.unsupported_claims) or grounded.reason,
-                )
+                detail = ", ".join(grounded.unsupported_claims) or grounded.reason
+                self._rewrite_into_state(state, vehicle, f"groundedness fail: {detail}")
                 continue
             break
 
         return self._finalize_refusal(job_id, state)
 
-    def _run_iteration(self, state: LoopState, vehicle) -> LoopTraceEntry:
+    def _run_iteration(
+        self, state: LoopState, vehicle
+    ) -> tuple[LoopTraceEntry, list[DocumentChunk]]:
         candidates = self._retrieval.retrieve(
             query=state.current_query,
             vehicle_id=vehicle.id,
@@ -137,10 +136,9 @@ class AgenticChatService:
                 relevant_count=0,
                 rejected_reasons={},
             )
-            entry._relevant_chunks = []
             if self._verbose:
                 print_loop_step_retrieval(entry, self._max_iterations)
-            return entry
+            return entry, []
 
         reranked = self._reranker.rerank(
             query=state.current_query,
@@ -152,7 +150,7 @@ class AgenticChatService:
             self._relevance.grade(chunk=c, question=state.original_question, vehicle=vehicle)
             for c, _ in reranked
         ]
-        relevant = [r for r in results if r.relevant]
+        relevant = [r.chunk for r in results if r.relevant]
         rejected = [r for r in results if not r.relevant]
 
         state.rejected_chunk_ids.update(r.chunk.id for r in rejected if r.chunk.id is not None)
@@ -166,10 +164,9 @@ class AgenticChatService:
             relevant_count=len(relevant),
             rejected_reasons=rejected_reasons,
         )
-        entry._relevant_chunks = [r.chunk for r in relevant]
         if self._verbose:
             print_loop_step_retrieval(entry, self._max_iterations)
-        return entry
+        return entry, relevant
 
     @staticmethod
     def _summarise_reasons(rejected: list[GradingResult]) -> dict[str, int]:
@@ -184,10 +181,6 @@ class AgenticChatService:
             else:
                 buckets["other"] += 1
         return dict(buckets)
-
-    @staticmethod
-    def _collect_relevant_chunks(entry: LoopTraceEntry) -> list[DocumentChunk]:
-        return getattr(entry, "_relevant_chunks", [])
 
     def _rewrite_into_state(self, state: LoopState, vehicle, failure_reason: str) -> None:
         state.failure_reasons.append(failure_reason)
