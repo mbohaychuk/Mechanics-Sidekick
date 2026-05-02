@@ -126,3 +126,22 @@ def test_retrieve_orders_by_fused_rrf_score_descending(db_session, vehicle_with_
     results = svc.retrieve(query="bolt torque", vehicle_id=v1.id)
     scores = [s for _, s in results]
     assert scores == sorted(scores, reverse=True)
+
+
+def test_retrieve_handles_question_marks_and_punctuation(db_session, vehicle_with_corpus):
+    v1, _ = vehicle_with_corpus
+    svc = _make_service(db_session)
+    # Punctuation and an FTS5 keyword in the query.
+    results = svc.retrieve(query="What is the head bolt torque?", vehicle_id=v1.id)
+    contents = [c.content for c, _ in results]
+    assert "Cylinder head bolt torque is 129 Nm" in contents
+
+
+def test_retrieve_handles_query_with_only_punctuation_returns_empty(db_session, vehicle_with_corpus):
+    v1, _ = vehicle_with_corpus
+    svc = _make_service(db_session)
+    # Pure punctuation has no FTS5 tokens; vec_ranked may still match. The
+    # service should not raise — it should return whatever vector found.
+    results = svc.retrieve(query="???", vehicle_id=v1.id)
+    # Don't assert exact contents; just no exception.
+    assert isinstance(results, list)

@@ -5,15 +5,35 @@ A single SQL CTE pulls per-retriever top-K candidates, fuses them via
 Reciprocal Rank Fusion (score = sum(1.0 / (rrf_k + rank_i))), and joins
 document_chunks to scope by vehicle and exclude rejected chunk ids.
 
+User questions are sanitized to an OR-of-tokens FTS5 query before binding.
+When the question contains no alphanumeric tokens, the BM25 path is skipped
+entirely and we fall back to a vec-only variant of the SQL.
+
 This is the spec's stage-1 retriever; downstream callers rerank the result
 to top-10 with a cross-encoder.
 """
+import re
+
 import sqlite_vec
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 from app.models.document_chunk import DocumentChunk
 from app.services.embedding_service import EmbeddingService
+
+
+_FTS5_TOKEN = re.compile(r"\w+", re.UNICODE)
+
+
+def _to_fts5_query(query: str) -> str:
+    """Convert free-form text to an FTS5 OR query of bare tokens.
+
+    Strips quotes, punctuation, and operators. Returns an empty string when
+    the query has no alphanumeric content — callers must treat that as
+    'BM25 contributes nothing' rather than 'syntax error'.
+    """
+    tokens = _FTS5_TOKEN.findall(query)
+    return " OR ".join(tokens)
 
 
 class HybridRetrievalService:
@@ -49,28 +69,27 @@ class HybridRetrievalService:
         Returns:
             list of (chunk, fused_score) — empty if no chunks match.
         """
+        fts_query = _to_fts5_query(query)
         query_emb = self._embedding.embed_query(query)
         emb_blob = sqlite_vec.serialize_float32(query_emb)
 
-        sql = text(_HYBRID_SQL)
-        sql = sql.bindparams(
-            bindparam("exclude_ids", expanding=True),
-        )
-        rows = self._session.execute(
-            sql,
-            {
-                "query": query,
-                "embedding": emb_blob,
-                "vehicle_id": vehicle_id,
-                "bm25_k": self._bm25_top_k,
-                "vec_k": self._vector_top_k,
-                "rrf_k": self._rrf_k,
-                "result_k": self._result_top_k,
-                # SQLite IN-clause needs at least one element; sentinel -1 never matches a real id.
-                "exclude_ids": list(exclude_chunk_ids) or [-1],
-            },
-        ).fetchall()
+        sql = text(_HYBRID_SQL_WITH_BM25 if fts_query else _HYBRID_SQL_VEC_ONLY)
+        sql = sql.bindparams(bindparam("exclude_ids", expanding=True))
 
+        params = {
+            "embedding": emb_blob,
+            "vehicle_id": vehicle_id,
+            "vec_k": self._vector_top_k,
+            "rrf_k": self._rrf_k,
+            "result_k": self._result_top_k,
+            # SQLite IN-clause needs at least one element; sentinel -1 never matches a real id.
+            "exclude_ids": list(exclude_chunk_ids) or [-1],
+        }
+        if fts_query:
+            params["query"] = fts_query
+            params["bm25_k"] = self._bm25_top_k
+
+        rows = self._session.execute(sql, params).fetchall()
         if not rows:
             return []
 
@@ -86,7 +105,7 @@ class HybridRetrievalService:
         return [(chunk_by_id[cid], score_by_id[cid]) for cid in chunk_ids_in_order if cid in chunk_by_id]
 
 
-_HYBRID_SQL = """
+_HYBRID_SQL_WITH_BM25 = """
 WITH bm25_ranked AS (
     SELECT chunk_id, ROW_NUMBER() OVER (ORDER BY rank) AS r
     FROM document_chunks_fts
@@ -116,5 +135,22 @@ WHERE d.vehicle_id = :vehicle_id
   AND d.processing_status = 'ready'
   AND c.id NOT IN :exclude_ids
 ORDER BY f.score DESC
+LIMIT :result_k
+"""
+
+_HYBRID_SQL_VEC_ONLY = """
+WITH vec_ranked AS (
+    SELECT chunk_id, ROW_NUMBER() OVER (ORDER BY distance) AS r
+    FROM document_chunks_vec
+    WHERE embedding MATCH :embedding AND k = :vec_k
+)
+SELECT v.chunk_id, 1.0 / (:rrf_k + v.r) AS score
+FROM vec_ranked v
+JOIN document_chunks c ON c.id = v.chunk_id
+JOIN documents d ON d.id = c.document_id
+WHERE d.vehicle_id = :vehicle_id
+  AND d.processing_status = 'ready'
+  AND c.id NOT IN :exclude_ids
+ORDER BY score DESC
 LIMIT :result_k
 """
