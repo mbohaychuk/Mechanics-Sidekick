@@ -95,3 +95,57 @@ def test_chunk_index_is_sequential():
 def test_empty_pages_returns_no_chunks():
     svc = StructuredChunkingService()
     assert svc.chunk_blocks([]) == []
+
+
+def test_chunk_blocks_excludes_lines_inside_provided_bboxes():
+    """Lines whose midpoint sits inside a table bbox must not appear in any prose chunk."""
+    pages = [{
+        "page_number": 1,
+        "blocks": [
+            {
+                "type": 0,
+                "lines": [
+                    {"bbox": (10, 10, 200, 25), "spans": [
+                        {"text": "INTRODUCTION", "size": 18.0, "flags": 16, "font": "Bold"}
+                    ]},
+                    {"bbox": (10, 100, 200, 115), "spans": [
+                        {"text": "This is body text outside the table.", "size": 12.0, "flags": 0, "font": "Regular"}
+                    ]},
+                    {"bbox": (10, 200, 200, 215), "spans": [
+                        {"text": "Cylinder head 129 Nm", "size": 12.0, "flags": 0, "font": "Regular"}
+                    ]},
+                ],
+            }
+        ],
+    }]
+    from app.services.structured_chunking_service import StructuredChunkingService
+    svc = StructuredChunkingService(chunk_size=500, chunk_overlap=0)
+
+    # Table bbox covers y=190..220 → the third line is inside it.
+    chunks = svc.chunk_blocks(pages, exclude_bboxes_per_page={1: [(0, 190, 300, 220)]})
+
+    flattened = " ".join(c["content"] for c in chunks)
+    assert "body text outside" in flattened
+    assert "Cylinder head" not in flattened
+
+
+def test_chunk_blocks_default_no_exclusion_keeps_existing_behaviour():
+    """Calling chunk_blocks without exclude_bboxes_per_page works as before."""
+    pages = [{
+        "page_number": 1,
+        "blocks": [{
+            "type": 0,
+            "lines": [
+                {"bbox": (10, 10, 200, 25), "spans": [
+                    {"text": "TITLE", "size": 18.0, "flags": 16, "font": "Bold"}
+                ]},
+                {"bbox": (10, 30, 200, 45), "spans": [
+                    {"text": "body", "size": 12.0, "flags": 0, "font": "Regular"}
+                ]},
+            ],
+        }],
+    }]
+    from app.services.structured_chunking_service import StructuredChunkingService
+    chunks = StructuredChunkingService(chunk_size=500, chunk_overlap=0).chunk_blocks(pages)
+    assert len(chunks) == 1
+    assert chunks[0]["content"] == "body"

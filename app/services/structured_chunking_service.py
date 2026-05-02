@@ -26,18 +26,25 @@ class StructuredChunkingService:
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
 
-    def chunk_blocks(self, page_blocks: list[dict]) -> list[dict]:
+    def chunk_blocks(
+        self,
+        page_blocks: list[dict],
+        exclude_bboxes_per_page: dict[int, list[tuple]] | None = None,
+    ) -> list[dict]:
         """Convert per-page block data into section-aware chunks.
 
         Args:
             page_blocks: Output of PDFService.extract_blocks() —
                          list of {"page_number": int, "blocks": list}
+            exclude_bboxes_per_page: Optional map page_number → list of
+                         (x0, y0, x1, y1) bboxes whose contents should be skipped
+                         (because they're already extracted as table chunks).
 
         Returns:
             list of {"chunk_index", "page_number", "section_title", "content"}
         """
         body_size = self._detect_body_size(page_blocks)
-        sections = self._split_into_sections(page_blocks, body_size)
+        sections = self._split_into_sections(page_blocks, body_size, exclude_bboxes_per_page or {})
         return self._sections_to_chunks(sections)
 
     # ── Private helpers ───────────────────────────────────────────────────────
@@ -90,7 +97,10 @@ class StructuredChunkingService:
         return False
 
     def _split_into_sections(
-        self, page_blocks: list[dict], body_size: float
+        self,
+        page_blocks: list[dict],
+        body_size: float,
+        exclude_bboxes_per_page: dict[int, list[tuple]],
     ) -> list[dict]:
         """Walk all blocks and group text under detected section headings."""
         sections: list[dict] = []
@@ -99,8 +109,11 @@ class StructuredChunkingService:
 
         for page in page_blocks:
             page_num = page["page_number"]
+            excludes = exclude_bboxes_per_page.get(page_num, [])
             for block in page["blocks"]:
                 for line in block["lines"]:
+                    if self._line_in_excluded_bbox(line, excludes):
+                        continue
                     spans = [s for s in line["spans"] if s["text"].strip()]
                     if not spans:
                         continue
@@ -123,6 +136,19 @@ class StructuredChunkingService:
             sections.append({"title": current_title, "content": current_content})
 
         return sections
+
+    @staticmethod
+    def _line_in_excluded_bbox(line: dict, excludes: list[tuple]) -> bool:
+        """A line whose midpoint sits inside any excluded bbox is skipped."""
+        bbox = line.get("bbox")
+        if not bbox or not excludes:
+            return False
+        cx = (bbox[0] + bbox[2]) / 2
+        cy = (bbox[1] + bbox[3]) / 2
+        for x0, y0, x1, y1 in excludes:
+            if x0 <= cx <= x1 and y0 <= cy <= y1:
+                return True
+        return False
 
     def _sections_to_chunks(self, sections: list[dict]) -> list[dict]:
         """Split each section into word-count windows, carrying the section title."""
