@@ -1,11 +1,13 @@
 # app/db/migrations.py
 """One-shot migration to the hybrid retrieval schema.
 
-Drops existing chunk rows (no production data), adds metadata columns to
-document_chunks, removes the legacy embedding_json column, and creates the
-FTS5 + sqlite-vec virtual tables that Plan 2's retrieval pipeline reads.
+When the legacy `embedding_json` column is present, clears existing chunk rows
+and drops that column. Adds the new metadata columns to document_chunks and
+creates the FTS5 + sqlite-vec virtual tables that Plan 2's retrieval pipeline
+reads.
 
-Idempotent: running twice on the same engine is a no-op.
+Idempotent: running twice on the same engine is a no-op — the DELETE branch
+only fires while `embedding_json` still exists (i.e., exactly once per DB).
 """
 from sqlalchemy import Engine, inspect, text
 
@@ -24,11 +26,12 @@ def apply_hybrid_retrieval_migration(engine: Engine, vec_dim: int) -> None:
     existing_tables = set(inspector.get_table_names())
 
     with engine.begin() as conn:
-        # 1. Drop chunk rows from any prior schema (no production data).
-        conn.execute(text("DELETE FROM document_chunks"))
-
-        # 2. Drop legacy embedding_json column if present.
+        # 1. One-time cutover from the legacy schema. Only runs when the
+        # old `embedding_json` column is still present — after the first
+        # migration on a given DB, this branch never fires again, so the
+        # function is a true no-op on subsequent calls.
         if "embedding_json" in existing_cols:
+            conn.execute(text("DELETE FROM document_chunks"))
             conn.execute(text("ALTER TABLE document_chunks DROP COLUMN embedding_json"))
 
         # 3. Add new metadata columns idempotently.

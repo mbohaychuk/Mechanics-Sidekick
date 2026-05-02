@@ -35,13 +35,37 @@ def test_migration_is_idempotent(tmp_path):
     Base.metadata.create_all(engine)
 
     apply_hybrid_retrieval_migration(engine, vec_dim=4)
-    apply_hybrid_retrieval_migration(engine, vec_dim=4)  # second call must not raise
+
+    # Seed real chunk data, then re-run the migration. The second call must not delete anything.
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO vehicles (year, make, model, engine, created_utc) "
+            "VALUES (2018, 'Ford', 'F-150', '5.0L', '2026-05-02 00:00:00')"
+        ))
+        conn.execute(text(
+            "INSERT INTO documents (vehicle_id, file_name, stored_path, document_type, processing_status, uploaded_utc) "
+            "VALUES (1, 'a.pdf', '/tmp/a.pdf', 'service_manual', 'ready', '2026-05-02 00:00:00')"
+        ))
+        conn.execute(text(
+            "INSERT INTO document_chunks (document_id, chunk_index, content, chunk_kind) "
+            "VALUES (1, 0, 'real chunk', 'prose')"
+        ))
+
+    apply_hybrid_retrieval_migration(engine, vec_dim=4)  # must not raise AND must not delete
+
+    with engine.connect() as conn:
+        row_count = conn.execute(text("SELECT COUNT(*) FROM document_chunks")).scalar()
+        assert row_count == 1, "Second migration call must be a no-op — it must not delete chunks"
 
 
 def test_migration_drops_existing_chunks(tmp_path):
     db_url = f"sqlite:///{tmp_path / 'test.db'}"
     engine = get_engine(db_url)
     Base.metadata.create_all(engine)
+
+    # Simulate the legacy schema: add the embedding_json column the new model dropped.
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE document_chunks ADD COLUMN embedding_json TEXT"))
 
     with engine.connect() as conn:
         conn.execute(text("INSERT INTO vehicles (year, make, model, engine, created_utc) VALUES (2018, 'Ford', 'F-150', '5.0L', '2018-01-01T00:00:00')"))
