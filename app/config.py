@@ -10,9 +10,15 @@ class Settings(BaseSettings):
     docs_dir: str = "./data/documents"
     chunk_size: int = 500
     chunk_overlap: int = 100
-    top_k_chunks: int = 5
     recent_messages: int = 6
-    vec_dim: int = 2560  # qwen3-embedding:4b dimension
+    vec_dim: int = 2560
+
+    # Hybrid retrieval (Plan 2)
+    bm25_top_k: int = 30
+    vector_top_k: int = 30
+    rrf_k: int = 60
+    rerank_top_k: int = 10
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

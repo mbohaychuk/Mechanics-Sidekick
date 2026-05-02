@@ -9,5 +9,7 @@ def test_settings_has_defaults():
     assert s.embed_model == "qwen3-embedding:4b"
     assert s.chunk_size == 500
     assert s.chunk_overlap == 100
-    assert s.top_k_chunks == 5
     assert s.recent_messages == 6
+    assert s.bm25_top_k == 30
+    assert s.rerank_top_k == 10
+    assert s.reranker_model == "BAAI/bge-reranker-v2-m3"
