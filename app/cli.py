@@ -245,29 +245,10 @@ def document_list(vehicle_id: int):
 
 
 def _make_chat_service(session):
-    from app.repositories.vehicle_repository import VehicleRepository
-    from app.repositories.document_repository import DocumentRepository
-    from app.repositories.job_repository import JobRepository
-    from app.repositories.chat_repository import ChatRepository
-    from app.repositories.chunk_repository import ChunkRepository
-    from app.services.ollama_service import OllamaService
-    from app.services.embedding_service import EmbeddingService
-    from app.services.retrieval_service import RetrievalService
-    from app.services.chat_service import ChatService
-
-    ollama_svc = OllamaService(settings.ollama_base_url)
-    embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
-    retrieval_svc = RetrievalService(ChunkRepository(session), embedding_svc, settings.top_k_chunks)
-
-    return ChatService(
-        chat_repo=ChatRepository(session),
-        job_repo=JobRepository(session),
-        vehicle_repo=VehicleRepository(session),
-        doc_repo=DocumentRepository(session),
-        retrieval_service=retrieval_svc,
-        ollama_service=ollama_svc,
-        chat_model=settings.chat_model,
-        recent_messages_limit=settings.recent_messages,
+    """Stub during Plan 3 implementation; real wiring lands in Task 8."""
+    raise NotImplementedError(
+        "AgenticChatService wiring is in progress (Plan 3, Task 8). "
+        "The chat commands are temporarily unavailable on this branch."
     )
 
 
