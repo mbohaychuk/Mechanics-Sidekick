@@ -12,11 +12,13 @@ vehicle_app = typer.Typer(help="Manage vehicles.")
 document_app = typer.Typer(help="Manage documents.")
 job_app = typer.Typer(help="Manage jobs.")
 chat_app = typer.Typer(help="Chat within a job.")
+db_app = typer.Typer(help="Database maintenance.")
 
 app.add_typer(vehicle_app, name="vehicle")
 app.add_typer(document_app, name="document")
 app.add_typer(job_app, name="job")
 app.add_typer(chat_app, name="chat")
+app.add_typer(db_app, name="db")
 
 _engine = None
 _Session = None
@@ -162,20 +164,25 @@ def _make_document_service(session):
     from app.services.document_service import DocumentService
     from app.services.pdf_service import PDFService
     from app.services.structured_chunking_service import StructuredChunkingService
+    from app.services.table_chunker import TableChunker
     from app.services.contextualization_service import ContextualizationService
     from app.services.embedding_service import EmbeddingService
+    from app.services.metadata_extractor import MetadataExtractor
     from app.services.ollama_service import OllamaService
 
     ollama_svc = OllamaService(settings.ollama_base_url)
     context_svc = ContextualizationService(ollama_svc, settings.context_model)
     embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
+    metadata_svc = MetadataExtractor(ollama_svc, settings.context_model)
     return DocumentService(
         doc_repo=DocumentRepository(session),
         chunk_repo=ChunkRepository(session),
         pdf_service=PDFService(),
         chunking_service=StructuredChunkingService(settings.chunk_size, settings.chunk_overlap),
+        table_chunker=TableChunker(),
         contextualization_service=context_svc,
         embedding_service=embedding_svc,
+        metadata_extractor=metadata_svc,
         docs_dir=settings.docs_dir,
     )
 
@@ -187,17 +194,41 @@ def document_add(
     vehicle_id: int,
     pdf_path: str,
     doc_type: str = typer.Option("service_manual", "--type", help="Document type label"),
+    recursive: bool = typer.Option(False, "--recursive", "-r", help="Recurse into directories."),
 ):
-    """Upload and process a PDF manual for a vehicle."""
-    with get_session() as session:
-        svc = _make_document_service(session)
-        try:
-            with console.status(f"Processing {pdf_path}...", spinner="dots"):
-                doc = svc.add_document(vehicle_id=vehicle_id, pdf_path=pdf_path, document_type=doc_type)
-        except (FileNotFoundError, RuntimeError, ValueError) as e:
-            print_error(str(e))
+    """Upload and process a PDF (or a directory of PDFs) for a vehicle."""
+    target = Path(pdf_path)
+    if not target.exists():
+        print_error(f"Path not found: {pdf_path}")
+        raise typer.Exit(1)
+
+    if target.is_dir():
+        if not recursive:
+            print_error(f"{pdf_path} is a directory — pass --recursive to process all PDFs inside it.")
             raise typer.Exit(1)
-        print_success(f"Document '{doc.file_name}' processed and ready (ID: {doc.id})")
+        pdf_files = sorted(target.rglob("*.pdf"))
+    else:
+        pdf_files = [target]
+
+    if not pdf_files:
+        print_error(f"No PDFs found at {pdf_path}")
+        raise typer.Exit(1)
+
+    failed: list[tuple[str, str]] = []
+    for pdf_file in pdf_files:
+        with get_session() as session:
+            svc = _make_document_service(session)
+            try:
+                with console.status(f"Processing {pdf_file.name}...", spinner="dots"):
+                    doc = svc.add_document(vehicle_id=vehicle_id, pdf_path=str(pdf_file), document_type=doc_type)
+                print_success(f"[{doc.id}] {doc.file_name}")
+            except (FileNotFoundError, RuntimeError, ValueError) as exc:
+                failed.append((pdf_file.name, str(exc)))
+                print_error(f"{pdf_file.name}: {exc}")
+
+    if failed:
+        console.print(f"\n[red]Completed with {len(failed)} failure(s).[/red]")
+        raise typer.Exit(1 if len(failed) == len(pdf_files) else 0)
 
 
 @document_app.command("list")
@@ -298,3 +329,43 @@ def chat_start(job_id: int):
                 print_error(f"Error: {e}")
                 continue
             print_answer(answer, sources)
+
+
+# --- DB maintenance commands ------------------------------------------------
+
+@db_app.command("reset")
+def db_reset(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
+):
+    """Drop the SQLite database and stored PDFs (development only)."""
+    import shutil
+
+    db_path = Path(settings.db_path)
+    docs_dir = Path(settings.docs_dir)
+
+    if not yes:
+        console.print(f"[yellow]This will delete:[/yellow]")
+        console.print(f"  • {db_path}")
+        console.print(f"  • {docs_dir}/* (PDF files)")
+        confirm = typer.confirm("Continue?", default=False)
+        if not confirm:
+            console.print("[dim]Cancelled.[/dim]")
+            raise typer.Exit(0)
+
+    if db_path.exists():
+        db_path.unlink()
+        print_success(f"Deleted {db_path}")
+    if docs_dir.exists():
+        for child in docs_dir.iterdir():
+            if child.name == ".gitkeep":
+                continue
+            if child.is_dir():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        print_success(f"Cleared {docs_dir}/")
+
+    # Reset module-global engine cache so the next command rebuilds it.
+    global _engine, _Session
+    _engine = None
+    _Session = None
