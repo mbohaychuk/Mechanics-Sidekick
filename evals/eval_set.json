@@ -1,0 +1,53 @@
+[
+  {
+    "id": "evt_cyl_head_004",
+    "question": "What is the maximum cylinder head warpage for a 2006 Audi A8 4.2L V8?",
+    "vehicle_context": {
+      "year": 2006,
+      "make": "Audi",
+      "model": "A8 Quattro",
+      "engine": "4.2L V8 (BFM)"
+    },
+    "expected_answer_substrings": ["0.1 mm", "0.10 mm"],
+    "expected_answer_summary": null,
+    "expected_source_pdf": "15-ENGINE-CYLINDER HEAD,VALVETRAIN 4.2L.pdf",
+    "expected_source_pages": [4],
+    "failure_mode": "engine_variant_trap",
+    "grader_type": "substring_any",
+    "trap_note": "If retrieved from 6.0L doc, would return 0.05 mm — half the actual tolerance"
+  },
+  {
+    "id": "evt_dtc_001",
+    "question": "What does DTC P0301 mean?",
+    "vehicle_context": {
+      "year": 2006,
+      "make": "Audi",
+      "model": "A8 Quattro",
+      "engine": "4.2L V8 (BFM)"
+    },
+    "expected_answer_substrings": ["Cylinder 1", "Misfire"],
+    "expected_answer_summary": null,
+    "expected_source_pdf": null,
+    "expected_source_pages": [],
+    "failure_mode": "exact_identifier",
+    "grader_type": "substring_any",
+    "trap_note": null
+  },
+  {
+    "id": "evt_proc_002",
+    "question": "What is the wheel bolt torque and tightening pattern for a 2006 Audi A8?",
+    "vehicle_context": {
+      "year": 2006,
+      "make": "Audi",
+      "model": "A8 Quattro",
+      "engine": "4.2L V8 (BFM)"
+    },
+    "expected_answer_substrings": ["120 Nm", "diagonal"],
+    "expected_answer_summary": null,
+    "expected_source_pdf": null,
+    "expected_source_pages": [],
+    "failure_mode": "general_procedure",
+    "grader_type": "substring_any",
+    "trap_note": null
+  }
+]
