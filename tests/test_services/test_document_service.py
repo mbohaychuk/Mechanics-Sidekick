@@ -135,3 +135,27 @@ def test_add_document_raises_when_pdf_missing(db_session, vehicle, tmp_path):
     svc = _make_service(db_session, tmp_path)
     with pytest.raises(FileNotFoundError):
         svc.add_document(vehicle_id=vehicle.id, pdf_path="/no/such/file.pdf")
+
+
+class TestExtractHeader:
+    """Static helper that parses headers out of table chunk content."""
+
+    def test_markdown_format(self):
+        from app.services.document_service import DocumentService
+        content = "| Bolt | Torque (Nm) |\n| --- | --- |\n| Head | 129 |"
+        assert DocumentService._extract_header(content) == ["Bolt", "Torque (Nm)"]
+
+    def test_row_format_with_section_and_table_prefix(self):
+        from app.services.document_service import DocumentService
+        content = "[Section: TORQUE SPECS] [Table t_abc123] Bolt: Cylinder head | Torque (Nm): 129"
+        assert DocumentService._extract_header(content) == ["Bolt", "Torque (Nm)"]
+
+    def test_row_format_with_table_prefix_only(self):
+        """When section_title was None, _render_row omits the [Section: ...] segment."""
+        from app.services.document_service import DocumentService
+        content = "[Table t_abc123] Bolt: Cylinder head | Torque (Nm): 129"
+        assert DocumentService._extract_header(content) == ["Bolt", "Torque (Nm)"]
+
+    def test_no_pipe_returns_empty(self):
+        from app.services.document_service import DocumentService
+        assert DocumentService._extract_header("just prose, no table here") == []

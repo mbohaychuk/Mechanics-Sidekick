@@ -1,4 +1,5 @@
 # app/services/document_service.py
+import re
 import shutil
 from pathlib import Path
 
@@ -186,7 +187,10 @@ class DocumentService:
             first_line = content.splitlines()[0]
             return [c.strip() for c in first_line.strip().strip("|").split("|") if c.strip()]
         # Row format: `[Section: ...] [Table ...] col1: val | col2: val`
-        if "|" in content:
-            cells = content.split("|")
+        # Strip the [Section: ...] [Table ...] prefix before splitting on `|` so the
+        # prefix's bracket/colon characters don't pollute the first column name.
+        body = re.sub(r"^\s*(\[Section:[^\]]*\]\s*)?\[Table\s+\S+\]\s*", "", content)
+        if "|" in body:
+            cells = body.split("|")
             return [c.split(":")[0].strip() for c in cells if ":" in c]
         return []
