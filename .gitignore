@@ -215,3 +215,6 @@ data/documents/*
 # Local editor config
 CLAUDE.md
 .claude/
+
+# Eval harness outputs (per-run JSON; only .gitkeep is tracked)
+evals/results/*.json
