@@ -392,14 +392,15 @@ def apply_hybrid_retrieval_migration(engine: Engine, vec_dim: int) -> None:
         ))
 
         # 5. FTS5 virtual table over the contextualized text (the same enriched
-        # text that gets embedded). content='' = external content; we manage
-        # rows manually from chunk_repository.
+        # text that gets embedded). chunk_id is UNINDEXED (stored, not
+        # tokenized) so retrieval can map matches back to document_chunks rows.
+        # NOTE: contentless mode (content='') would drop UNINDEXED column
+        # values on read, so the table is in default (full-content) mode.
         if "document_chunks_fts" not in existing_tables:
             conn.execute(text(
                 "CREATE VIRTUAL TABLE document_chunks_fts USING fts5("
                 "  chunk_id UNINDEXED,"
-                "  text,"
-                "  content=''"
+                "  text"
                 ")"
             ))
 
