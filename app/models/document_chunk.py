@@ -1,5 +1,5 @@
 # app/models/document_chunk.py
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey, Text, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
@@ -14,4 +14,7 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     section_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     context_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chunk_kind: Mapped[str] = mapped_column(String(16), default="prose")
+    engine_variant: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    table_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    table_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

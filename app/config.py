@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100
     top_k_chunks: int = 5
     recent_messages: int = 6
+    vec_dim: int = 2560  # qwen3-embedding:4b dimension
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

@@ -26,11 +26,13 @@ def _get_engine():
     global _engine, _Session
     if _engine is None:
         import app.models  # noqa: F401 — register all models with Base
+        from app.db.migrations import apply_hybrid_retrieval_migration
 
         db_path = Path(settings.db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
         _engine = get_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(_engine)
+        apply_hybrid_retrieval_migration(_engine, vec_dim=settings.vec_dim)
         _Session = get_session_factory(_engine)
     return _engine
 
