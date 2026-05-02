@@ -12,6 +12,7 @@ dependencies = [
     "rich>=13.0",
     "numpy>=1.26",
     "python-dotenv>=1.0",
+    "sqlite-vec>=0.1",
 ]
 
 [project.scripts]
