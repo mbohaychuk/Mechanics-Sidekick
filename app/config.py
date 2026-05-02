@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     rerank_top_k: int = 10
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
 
+    # Agentic loop (Plan 3)
+    max_loop_iterations: int = 2
+    loop_verbose: bool = True
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

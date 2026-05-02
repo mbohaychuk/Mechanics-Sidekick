@@ -245,10 +245,50 @@ def document_list(vehicle_id: int):
 
 
 def _make_chat_service(session):
-    """Stub during Plan 3 implementation; real wiring lands in Task 8."""
-    raise NotImplementedError(
-        "AgenticChatService wiring is in progress (Plan 3, Task 8). "
-        "The chat commands are temporarily unavailable on this branch."
+    from app.repositories.vehicle_repository import VehicleRepository
+    from app.repositories.document_repository import DocumentRepository
+    from app.repositories.job_repository import JobRepository
+    from app.repositories.chat_repository import ChatRepository
+    from app.rag.grader import GroundednessGrader, RelevanceGrader
+    from app.rag.query_rewriter import QueryRewriter
+    from app.services.agentic_chat_service import AgenticChatService
+    from app.services.embedding_service import EmbeddingService
+    from app.services.hybrid_retrieval_service import HybridRetrievalService
+    from app.services.ollama_service import OllamaService
+    from app.services.reranker import BgeReranker
+
+    ollama_svc = OllamaService(settings.ollama_base_url)
+    embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
+
+    retrieval_svc = HybridRetrievalService(
+        session=session,
+        embedding_service=embedding_svc,
+        bm25_top_k=settings.bm25_top_k,
+        vector_top_k=settings.vector_top_k,
+        rrf_k=settings.rrf_k,
+        result_top_k=max(settings.bm25_top_k, settings.vector_top_k),
+    )
+    reranker = BgeReranker(model_name=settings.reranker_model)
+    relevance = RelevanceGrader(ollama_svc, settings.context_model)
+    groundedness = GroundednessGrader(ollama_svc, settings.context_model)
+    rewriter = QueryRewriter(ollama_svc, settings.context_model)
+
+    return AgenticChatService(
+        chat_repo=ChatRepository(session),
+        job_repo=JobRepository(session),
+        vehicle_repo=VehicleRepository(session),
+        doc_repo=DocumentRepository(session),
+        retrieval_service=retrieval_svc,
+        reranker=reranker,
+        relevance_grader=relevance,
+        groundedness_grader=groundedness,
+        query_rewriter=rewriter,
+        ollama_service=ollama_svc,
+        chat_model=settings.chat_model,
+        recent_messages_limit=settings.recent_messages,
+        max_iterations=settings.max_loop_iterations,
+        rerank_top_k=settings.rerank_top_k,
+        verbose=settings.loop_verbose,
     )
 
 
@@ -260,15 +300,14 @@ def chat_ask(job_id: int, question: str):
     with get_session() as session:
         svc = _make_chat_service(session)
         try:
-            with console.status("Thinking...", spinner="dots"):
-                answer, sources = svc.ask(job_id=job_id, question=question)
+            result = svc.ask(job_id=job_id, question=question)
         except ValueError as e:
             print_error(str(e))
             raise typer.Exit(1)
         except Exception as e:
             print_error(f"Error: {e}")
             raise typer.Exit(1)
-        print_answer(answer, sources)
+        print_answer(result.answer, result.sources)
 
 
 @chat_app.command("start")
@@ -304,12 +343,11 @@ def chat_start(job_id: int):
         with get_session() as session:
             svc = _make_chat_service(session)
             try:
-                with console.status("Thinking...", spinner="dots"):
-                    answer, sources = svc.ask(job_id=job_id, question=question)
+                result = svc.ask(job_id=job_id, question=question)
             except Exception as e:
                 print_error(f"Error: {e}")
                 continue
-            print_answer(answer, sources)
+            print_answer(result.answer, result.sources)
 
 
 # --- DB maintenance commands ------------------------------------------------
