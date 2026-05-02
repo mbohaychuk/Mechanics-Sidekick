@@ -43,7 +43,7 @@ def test_system_prompt_includes_vehicle_engine():
 def test_build_messages_last_message_is_user_question():
     messages = build_messages(
         _make_job(), _make_vehicle(), [],
-        [(_make_chunk("Torque 129 Nm"), 0.9)],
+        [_make_chunk("Torque 129 Nm")],
         "What is the torque?",
         {1: "brake_manual.pdf"},
     )
@@ -55,7 +55,7 @@ def test_build_messages_includes_chunk_content_and_filename():
     chunk = _make_chunk("Torque spec is 129 Nm", doc_id=1, page_number=214)
     messages = build_messages(
         _make_job(), _make_vehicle(), [],
-        [(chunk, 0.95)],
+        [chunk],
         "Torque spec?",
         {1: "brake_manual.pdf"},
     )
@@ -72,7 +72,7 @@ def test_build_messages_includes_recent_history():
 
     messages = build_messages(
         _make_job(), _make_vehicle(), [prior_msg],
-        [(_make_chunk("Some content"), 0.8)],
+        [_make_chunk("Some content")],
         "New question",
         {1: "doc.pdf"},
     )
@@ -87,7 +87,7 @@ def test_build_messages_includes_context_summary_when_present():
     )
     messages = build_messages(
         _make_job(), _make_vehicle(), [],
-        [(chunk, 0.9)],
+        [chunk],
         "Torque?",
         {1: "manual.pdf"},
     )
@@ -99,7 +99,7 @@ def test_build_messages_includes_section_title_when_present():
     chunk = _make_chunk("Tighten bolts to 23 Nm", section_title="CYLINDER HEAD TORQUE SPECS")
     messages = build_messages(
         _make_job(), _make_vehicle(), [],
-        [(chunk, 0.9)],
+        [chunk],
         "Torque?",
         {1: "manual.pdf"},
     )
@@ -111,7 +111,7 @@ def test_build_messages_omits_summary_line_when_none():
     chunk = _make_chunk("Tighten bolts to 23 Nm", context_summary=None)
     messages = build_messages(
         _make_job(), _make_vehicle(), [],
-        [(chunk, 0.9)],
+        [chunk],
         "Torque?",
         {1: "manual.pdf"},
     )
@@ -122,7 +122,7 @@ def test_build_messages_omits_summary_line_when_none():
 def test_build_messages_has_multiple_system_messages():
     messages = build_messages(
         _make_job(), _make_vehicle(), [],
-        [(_make_chunk("Content"), 0.9)],
+        [_make_chunk("Content")],
         "Question?",
         {1: "manual.pdf"},
     )
