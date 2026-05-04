@@ -17,25 +17,18 @@ from app.config import settings
 from app.db import Base, get_engine
 from app.db.migrations import apply_hybrid_retrieval_migration
 from app.repositories.chat_repository import ChatRepository
-from app.repositories.chunk_repository import ChunkRepository
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.job_repository import JobRepository
 from app.repositories.vehicle_repository import VehicleRepository
 from app.rag.grader import GroundednessGrader, RelevanceGrader
 from app.rag.query_rewriter import QueryRewriter
 from app.services.agentic_chat_service import AgenticChatService
-from app.services.contextualization_service import ContextualizationService
-from app.services.document_service import DocumentService
 from app.services.embedding_service import EmbeddingService
 from app.services.hybrid_retrieval_service import HybridRetrievalService
-from app.services.metadata_extractor import MetadataExtractor
 from app.services.ollama_service import OllamaService
-from app.services.pdf_service import PDFService
 from app.services.reranker import BgeReranker
-from app.services.structured_chunking_service import StructuredChunkingService
-from app.services.table_chunker import TableChunker
 from evals.grader import GraderResult, LlmJudgeGrader, SubstringAnyGrader
-from evals.seed import ensure_pdf_ingested, ensure_vehicle, reset_caches
+from evals.seed import find_vehicle, reset_caches
 
 import app.models  # noqa: F401 — register models with Base
 
@@ -44,7 +37,11 @@ def run(
     eval_set_path: str = "evals/eval_set.json",
     output_path: str | None = None,
 ) -> str:
-    """Run the full eval set against the current main DB. Returns the output path."""
+    """Run the full eval set against the current main DB. Returns the output path.
+
+    Vehicles and their manuals must already be ingested (via `vehicle add` and
+    `document add`); the runner does not auto-create or auto-ingest.
+    """
     reset_caches()
 
     entries = json.loads(Path(eval_set_path).read_text())
@@ -63,17 +60,12 @@ def run(
     records: list[dict] = []
     for entry in entries:
         with Session() as session:
-            vehicle_id = ensure_vehicle(session, entry["vehicle_context"])
+            try:
+                vehicle_id = find_vehicle(session, entry["vehicle_context"])
+            except LookupError as exc:
+                records.append(_lookup_error_record(entry, exc))
+                continue
 
-            doc_service = _build_document_service(session, ollama, embedding)
-            if entry.get("expected_source_pdf"):
-                ensure_pdf_ingested(
-                    session, vehicle_id, entry["expected_source_pdf"],
-                    settings.docs_dir, doc_service,
-                )
-            session.commit()
-
-        with Session() as session:
             job = JobRepository(session).create(vehicle_id=vehicle_id, title=f"eval:{entry['id']}")
             session.flush()
 
@@ -114,18 +106,21 @@ def run(
     return output_path
 
 
-def _build_document_service(session, ollama, embedding) -> DocumentService:
-    return DocumentService(
-        doc_repo=DocumentRepository(session),
-        chunk_repo=ChunkRepository(session),
-        pdf_service=PDFService(),
-        chunking_service=StructuredChunkingService(settings.chunk_size, settings.chunk_overlap),
-        table_chunker=TableChunker(),
-        contextualization_service=ContextualizationService(ollama, settings.context_model),
-        embedding_service=embedding,
-        metadata_extractor=MetadataExtractor(ollama, settings.context_model),
-        docs_dir=settings.docs_dir,
-    )
+def _lookup_error_record(entry: dict, exc: LookupError) -> dict:
+    return {
+        "id": entry["id"],
+        "failure_mode": entry["failure_mode"],
+        "question": entry["question"],
+        "passed": False,
+        "rationale": f"vehicle not found: {exc}",
+        "iterations": 0,
+        "latency_s": 0.0,
+        "answer": None,
+        "sources": [],
+        "expected_source_pdf": entry.get("expected_source_pdf"),
+        "expected_source_pages": entry.get("expected_source_pages", []),
+        "error": str(exc),
+    }
 
 
 def _build_chat_service(session, ollama, embedding, reranker) -> AgenticChatService:

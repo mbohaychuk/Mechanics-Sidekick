@@ -748,14 +748,14 @@ git commit -m "feat: add eval result diff tool"
 
 ---
 
-## Task 6: Seed helper — auto-create vehicle, ingest only required PDFs
+## Task 6: Seed helper — vehicle lookup only
 
 **Files:**
 - Create: `evals/seed.py`
 
-The runner must not require manual setup. Given an entry's `vehicle_context` and `expected_source_pdf`, this module ensures: (a) a Vehicle row exists matching the context, (b) the source PDF is ingested if not already present. Caches across entries within one run.
+The runner assumes vehicles + their manuals are already in the DB (the user adds them with `vehicle add` + `document add --recursive` as part of normal setup; that's how a vehicle's manuals get loaded in the first place). This module provides one helper: `find_vehicle()` resolves an entry's `vehicle_context` to a vehicle id and raises a clear error if the vehicle is missing — no auto-create, no per-entry PDF ingestion. `expected_source_pdf` on each entry is metric input only, never an ingestion trigger.
 
-This is a pragmatic design: the eval DB is `./data/app.db` (the same one used for chat). A clean run starts with `db reset`. We trade off "completely isolated test DB" against "exercise the real pipeline including the migration".
+The eval DB is `./data/app.db` — the same one chat uses. The runner is read-only with respect to the corpus.
 
 - [ ] **Step 1: Write the seed module**
 
@@ -1236,13 +1236,18 @@ git commit -m "feat: populate eval_set.json with the full 27-entry roster"
 
 **Goal:** Capture the first eval result so future runs have something to diff against. Manual.
 
-- [ ] **Step 1: Pre-flight**
+- [ ] **Step 1: Pre-flight (one-time corpus setup)**
+
+The runner assumes vehicles and their manuals are already ingested. For each `vehicle_context` referenced by the eval set:
 
 ```bash
-uv run mechanic-sidekick db reset --yes
+uv run mechanic-sidekick vehicle add   # 2006 Audi A8 Quattro, "4.2L V8 (BFM)"
+uv run mechanic-sidekick vehicle add   # 2006 Audi A8 Quattro, "6.0L W12 (BSB)"
+uv run mechanic-sidekick document add 1 <path-to-4.2L-manuals> --recursive
+uv run mechanic-sidekick document add 2 <path-to-6.0L-manuals> --recursive
 ```
 
-(Optional: ingest the entire Audi corpus first if you'd rather front-load — `uv run mechanic-sidekick document add 1 "data/documents/Audi_A8_2004-2009 Manuals" --recursive` after creating vehicle 1. The runner ingests on-demand so this is just an optimization.)
+The engine string must match the eval entry exactly. If you're starting clean, `mechanic-sidekick db reset --yes` first.
 
 - [ ] **Step 2: Run the harness**
 
