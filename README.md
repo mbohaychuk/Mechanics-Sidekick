@@ -42,8 +42,11 @@ Pull the required models before first use:
 
 ```bash
 ollama pull qwen3-embedding:4b
-ollama pull gpt-oss:20b
+ollama pull gemma4:26b
+ollama pull gemma4:e4b
 ```
+
+The chat model answers questions; the smaller context model generates the per-chunk summaries during ingestion (see [Contextual retrieval](#contextual-retrieval) below).
 
 ---
 
@@ -114,12 +117,13 @@ Defaults work out of the box. Override any setting via a `.env` file or environm
 
 | Variable | Default | Description |
 |---|---|---|
-| `CHAT_MODEL` | `gpt-oss:20b` | Ollama chat model |
+| `CHAT_MODEL` | `gemma4:26b` | Ollama chat model used to answer questions |
+| `CONTEXT_MODEL` | `gemma4:e4b` | Smaller Ollama model used to generate per-chunk context summaries during ingestion |
 | `EMBED_MODEL` | `qwen3-embedding:4b` | Ollama embedding model |
 | `DB_PATH` | `./data/app.db` | SQLite database path |
 | `DOCS_DIR` | `./data/documents` | PDF storage root |
-| `CHUNK_SIZE` | `1000` | Words per chunk |
-| `CHUNK_OVERLAP` | `200` | Overlap between consecutive chunks |
+| `CHUNK_SIZE` | `500` | Words per chunk |
+| `CHUNK_OVERLAP` | `100` | Overlap between consecutive chunks |
 | `TOP_K_CHUNKS` | `5` | Chunks retrieved per question |
 | `RECENT_MESSAGES` | `6` | Chat history window sent to the LLM |
 
@@ -133,7 +137,7 @@ The test suite is fully offline — Ollama is mocked and an in-memory SQLite dat
 uv run pytest tests/ -v
 ```
 
-54 tests covering repositories, services, RAG logic, and the chunking pipeline.
+Covers repositories, services, RAG logic, and the chunking pipeline.
 
 ---
 
