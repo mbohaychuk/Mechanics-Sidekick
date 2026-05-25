@@ -41,12 +41,11 @@ At no point does any data leave your machine.
 Pull the required models before first use:
 
 ```bash
-ollama pull qwen3-embedding:4b
-ollama pull gemma4:26b
-ollama pull gemma4:e4b
+ollama pull llama3.2:3b
+ollama pull nomic-embed-text
 ```
 
-The chat model answers questions; the smaller context model generates the per-chunk summaries during ingestion (see [Contextual retrieval](#contextual-retrieval) below).
+The chat model answers questions and also generates the per-chunk context summaries at ingestion time (see [Contextual retrieval](#contextual-retrieval) below). `CONTEXT_MODEL` can be pointed at a smaller model if you want to separate them.
 
 ---
 
@@ -117,9 +116,9 @@ Defaults work out of the box. Override any setting via a `.env` file or environm
 
 | Variable | Default | Description |
 |---|---|---|
-| `CHAT_MODEL` | `gemma4:26b` | Ollama chat model used to answer questions |
-| `CONTEXT_MODEL` | `gemma4:e4b` | Smaller Ollama model used to generate per-chunk context summaries during ingestion |
-| `EMBED_MODEL` | `qwen3-embedding:4b` | Ollama embedding model |
+| `CHAT_MODEL` | `llama3.2:3b` | Ollama chat model used to answer questions |
+| `CONTEXT_MODEL` | `llama3.2:3b` | Ollama model used to generate per-chunk context summaries during ingestion; can be pointed at a smaller model |
+| `EMBED_MODEL` | `nomic-embed-text` | Ollama embedding model |
 | `DB_PATH` | `./data/app.db` | SQLite database path |
 | `DOCS_DIR` | `./data/documents` | PDF storage root |
 | `CHUNK_SIZE` | `500` | Words per chunk |
