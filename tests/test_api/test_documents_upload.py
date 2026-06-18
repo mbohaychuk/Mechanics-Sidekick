@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import fitz  # PyMuPDF
@@ -28,9 +29,11 @@ def _fake_ctx():
 def test_upload_registers_then_processes_to_ready(api_client, monkeypatch, tmp_path):
     vid = _make_vehicle(api_client)
 
-    monkeypatch.setattr("app.api.ingestion.make_embedding_service", lambda s: _fake_emb())
     monkeypatch.setattr(
-        "app.api.ingestion.make_contextualization_service", lambda s: _fake_ctx()
+        "app.services.factories.make_embedding_service", lambda s: _fake_emb()
+    )
+    monkeypatch.setattr(
+        "app.services.factories.make_contextualization_service", lambda s: _fake_ctx()
     )
 
     pdf = tmp_path / "manual.pdf"
@@ -53,6 +56,52 @@ def test_upload_registers_then_processes_to_ready(api_client, monkeypatch, tmp_p
     # TestClient runs background tasks before returning, so processing is done.
     final = api_client.get(f"/api/documents/{doc_id}").json()
     assert final["processing_status"] == "ready"
+
+
+def test_upload_traversal_filename_is_contained(api_client, monkeypatch, tmp_path):
+    from app.config import settings
+    from app.repositories.document_repository import DocumentRepository
+
+    vid = _make_vehicle(api_client)
+
+    monkeypatch.setattr(
+        "app.services.factories.make_embedding_service", lambda s: _fake_emb()
+    )
+    monkeypatch.setattr(
+        "app.services.factories.make_contextualization_service", lambda s: _fake_ctx()
+    )
+
+    pdf = tmp_path / "manual.pdf"
+    doc = fitz.open()
+    doc.new_page().insert_text((72, 72), "Torque the head bolts to 40 Nm.")
+    doc.save(str(pdf))
+    doc.close()
+
+    with open(pdf, "rb") as fh:
+        r = api_client.post(
+            f"/api/vehicles/{vid}/documents",
+            files={
+                "file": (
+                    "a/b/../../../../tmp/evil.pdf",
+                    fh,
+                    "application/pdf",
+                )
+            },
+        )
+
+    assert r.status_code == 202
+    doc_id = r.json()["id"]
+
+    factory = api_client.app.state.session_factory
+    session = factory()
+    try:
+        stored_path = DocumentRepository(session).get_by_id(doc_id).stored_path
+    finally:
+        session.close()
+
+    resolved = Path(stored_path).resolve()
+    docs_root = Path(settings.docs_dir).resolve()
+    assert resolved.is_relative_to(docs_root)
 
 
 def test_upload_to_missing_vehicle_is_404(api_client, tmp_path):

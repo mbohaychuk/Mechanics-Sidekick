@@ -1,0 +1,6 @@
+from typing import Protocol
+
+
+class LLMBackend(Protocol):
+    def embed(self, texts: list[str], model: str) -> list[list[float]]: ...
+    def chat(self, messages: list[dict], model: str) -> str: ...

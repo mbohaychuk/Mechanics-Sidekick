@@ -1,10 +1,10 @@
-from collections.abc import Iterator
+from collections.abc import Generator
 
 from fastapi import Request
 from sqlalchemy.orm import Session
 
 
-def get_session(request: Request) -> Iterator[Session]:
+def get_session(request: Request) -> Generator[Session, None, None]:
     session: Session = request.app.state.session_factory()
     try:
         yield session

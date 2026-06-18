@@ -8,7 +8,7 @@ from app.services.openai_service import OpenAIService
 def make_embedding_service(settings: Settings) -> EmbeddingService:
     if settings.embed_provider == "openai":
         return EmbeddingService(
-            OpenAIService(api_key=settings.openai_api_key),
+            OpenAIService(api_key=settings.openai_api_key or None),
             settings.openai_embed_model,
         )
     return EmbeddingService(
@@ -20,7 +20,7 @@ def make_embedding_service(settings: Settings) -> EmbeddingService:
 def make_contextualization_service(settings: Settings) -> ContextualizationService:
     if settings.llm_provider == "openai":
         return ContextualizationService(
-            OpenAIService(api_key=settings.openai_api_key),
+            OpenAIService(api_key=settings.openai_api_key or None),
             settings.openai_chat_model,
         )
     return ContextualizationService(

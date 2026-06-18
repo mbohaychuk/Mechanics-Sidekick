@@ -1,4 +1,3 @@
-import shutil
 import tempfile
 from pathlib import Path
 
@@ -39,25 +38,38 @@ def upload_document(
     if VehicleRepository(session).get_by_id(vehicle_id) is None:
         raise HTTPException(status_code=404, detail=f"Vehicle {vehicle_id} not found")
 
-    suffix = Path(file.filename or "upload.pdf").suffix or ".pdf"
+    if file.content_type not in ("application/pdf", "application/octet-stream"):
+        raise HTTPException(status_code=415, detail="Only PDF uploads are accepted")
+
+    file_name = Path(file.filename or "upload.pdf").name or "upload.pdf"
+    suffix = Path(file_name).suffix or ".pdf"
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:
-        shutil.copyfileobj(file.file, tmp)
-    finally:
+        written = 0
+        while chunk := file.file.read(1024 * 1024):
+            written += len(chunk)
+            if written > settings.max_upload_bytes:
+                raise HTTPException(status_code=413, detail="Upload too large")
+            tmp.write(chunk)
+        tmp.flush()
+
+        doc = DocumentRepository(session).create(
+            vehicle_id=vehicle_id,
+            file_name=file_name,
+            stored_path="",
+        )
+        session.commit()  # persist so the background worker's new session sees the row
+
+        background_tasks.add_task(
+            ingest_document,
+            request.app.state.session_factory,
+            settings,
+            doc.id,
+            tmp.name,
+        )
+    except Exception:
         tmp.close()
-
-    doc = DocumentRepository(session).create(
-        vehicle_id=vehicle_id,
-        file_name=file.filename or "upload.pdf",
-        stored_path="",
-    )
-    session.commit()  # persist so the background worker's new session sees the row
-
-    background_tasks.add_task(
-        ingest_document,
-        request.app.state.session_factory,
-        settings,
-        doc.id,
-        tmp.name,
-    )
+        Path(tmp.name).unlink(missing_ok=True)
+        raise
+    tmp.close()
     return doc

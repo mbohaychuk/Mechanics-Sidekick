@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_origin: str = "http://localhost:5173"
     spa_dist_dir: str = "frontend/dist"
+    max_upload_bytes: int = 100 * 1024 * 1024
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
