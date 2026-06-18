@@ -6,5 +6,6 @@ export const router = createRouter({
     { path: '/', name: 'vehicles', component: () => import('@/views/VehiclesView.vue') },
     { path: '/vehicles/:id', name: 'vehicle', component: () => import('@/views/VehicleDetailView.vue') },
     { path: '/jobs/:id/chat', name: 'chat', component: () => import('@/views/ChatView.vue') },
+    { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
   ],
 })
