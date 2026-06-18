@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -18,7 +19,7 @@ def configure_db(app: FastAPI, db_url: str) -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not getattr(app.state, "session_factory", None):
         db_path = Path(settings.db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
