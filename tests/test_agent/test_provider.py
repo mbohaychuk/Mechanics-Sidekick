@@ -51,3 +51,16 @@ def test_accumulates_tool_call_across_chunks():
     assert turn.tool_calls == [
         ToolCall(id="call_1", name="search_manuals", arguments={"query": "brakes"})
     ]
+
+
+def test_malformed_tool_arguments_default_to_empty_dict():
+    client = MagicMock()
+    client.chat.completions.create.return_value = iter(
+        [_toolcall_chunk(0, id="c", name="search_manuals", args="{bad json")]
+    )
+    provider = OpenAIProvider(api_key="x", model="gpt-4.1-mini", client=client)
+
+    events = list(provider.stream_turn([{"role": "user", "content": "hi"}], [{"x": 1}]))
+
+    turn = events[-1]["turn"]
+    assert turn.tool_calls[0].arguments == {}

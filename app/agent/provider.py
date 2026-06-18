@@ -45,6 +45,7 @@ class OpenAIProvider:
         acc: dict[int, dict] = {}
         for chunk in stream:
             delta = chunk.choices[0].delta
+            # None = no content delta; "" is a no-op chunk and is skipped
             if getattr(delta, "content", None):
                 text_parts.append(delta.content)
                 yield {"type": "token", "text": delta.content}
