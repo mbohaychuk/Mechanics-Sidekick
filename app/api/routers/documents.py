@@ -10,6 +10,7 @@ from app.api.ingestion import ingest_document
 from app.api.schemas import DocumentOut
 from app.config import settings
 from app.repositories.document_repository import DocumentRepository
+from app.repositories.vehicle_repository import VehicleRepository
 
 router = APIRouter(prefix="/api", tags=["documents"])
 
@@ -35,6 +36,9 @@ def upload_document(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
+    if VehicleRepository(session).get_by_id(vehicle_id) is None:
+        raise HTTPException(status_code=404, detail=f"Vehicle {vehicle_id} not found")
+
     suffix = Path(file.filename or "upload.pdf").suffix or ".pdf"
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     try:

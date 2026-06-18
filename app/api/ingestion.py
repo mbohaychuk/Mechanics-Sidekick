@@ -1,6 +1,9 @@
+import logging
 from pathlib import Path
 
 from app.config import Settings
+
+logger = logging.getLogger(__name__)
 from app.repositories.chunk_repository import ChunkRepository
 from app.repositories.document_repository import DocumentRepository
 from app.services.document_service import DocumentService
@@ -31,6 +34,8 @@ def _mark_failed(session_factory, doc_id: int) -> None:
     try:
         DocumentRepository(session).update_status(doc_id, "failed")
         session.commit()
+    except Exception:
+        logger.exception("failed to mark document %s failed", doc_id)
     finally:
         session.close()
 

@@ -32,3 +32,15 @@ def test_chat_returns_message_content():
     client.chat.completions.create.assert_called_once_with(
         model="gpt-4.1-mini", messages=[{"role": "user", "content": "hi"}]
     )
+
+
+def test_chat_returns_empty_string_when_content_none():
+    client = MagicMock()
+    client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=None))]
+    )
+    svc = OpenAIService(api_key="x", client=client)
+
+    result = svc.chat([{"role": "user", "content": "hi"}], model="gpt-4.1-mini")
+
+    assert result == ""

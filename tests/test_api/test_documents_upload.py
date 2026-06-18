@@ -53,3 +53,26 @@ def test_upload_registers_then_processes_to_ready(api_client, monkeypatch, tmp_p
     # TestClient runs background tasks before returning, so processing is done.
     final = api_client.get(f"/api/documents/{doc_id}").json()
     assert final["processing_status"] == "ready"
+
+
+def test_upload_to_missing_vehicle_is_404(api_client, tmp_path):
+    pdf = tmp_path / "manual.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake content")
+
+    with open(pdf, "rb") as fh:
+        r = api_client.post(
+            "/api/vehicles/9999/documents",
+            files={"file": ("manual.pdf", fh, "application/pdf")},
+        )
+
+    assert r.status_code == 404
+
+    # No document row should have been created
+    from app.repositories.document_repository import DocumentRepository
+
+    session = api_client.app.state.session_factory()
+    try:
+        rows = DocumentRepository(session).list_by_vehicle(9999)
+    finally:
+        session.close()
+    assert rows == []

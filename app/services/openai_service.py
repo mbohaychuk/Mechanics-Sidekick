@@ -17,4 +17,4 @@ class OpenAIService:
 
     def chat(self, messages: list[dict], model: str) -> str:
         response = self._client.chat.completions.create(model=model, messages=messages)
-        return response.choices[0].message.content
+        return response.choices[0].message.content or ""
