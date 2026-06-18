@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 mechanic-sidekick = "app.cli:app"
+mechanic-sidekick-api = "app.api.server:main"
 
 [build-system]
 requires = ["hatchling"]
