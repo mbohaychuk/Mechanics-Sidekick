@@ -35,7 +35,7 @@ This is Plan 2 of the phased v1 work (Plan 1 backend foundation is merged). It p
   - `ChatProvider` Protocol: `stream_turn(messages: list[dict], tools: list[dict]) -> Iterator[dict]` — yields `{"type":"token","text":str}` events during content, then exactly one terminal `{"type":"turn","turn":ProviderTurn}`.
   - `OpenAIProvider(api_key: str | None, model: str, client=None)` implementing `ChatProvider` over `client.chat.completions.create(..., stream=True)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_agent/__init__.py` (empty).
 
@@ -96,12 +96,12 @@ def test_accumulates_tool_call_across_chunks():
     ]
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `uv run pytest tests/test_agent/test_provider.py -v`
 Expected: FAIL — `ModuleNotFoundError: app.agent.provider`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `app/agent/__init__.py` (empty).
 
@@ -176,12 +176,12 @@ class OpenAIProvider:
         yield {"type": "turn", "turn": ProviderTurn(text="".join(text_parts), tool_calls=tool_calls)}
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `uv run pytest tests/test_agent/test_provider.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/agent/__init__.py app/agent/provider.py tests/test_agent
@@ -202,7 +202,7 @@ git commit -m "feat(agent): streaming OpenAI chat provider with tool-call accumu
   - `SEARCH_MANUALS_TOOL: dict` — an OpenAI function-tool schema with name `search_manuals` and a required string `query`.
   - `execute_search_manuals(retrieval, doc_repo, vehicle_id, query) -> dict` returning `{"sources": [{"filename","page","score"}], "model_text": str}`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_agent/test_tools.py`:
 ```python
@@ -243,12 +243,12 @@ def test_execute_empty_results():
     assert "No relevant" in result["model_text"]
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `uv run pytest tests/test_agent/test_tools.py -v`
 Expected: FAIL — `ModuleNotFoundError: app.agent.tools`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `app/agent/tools.py`:
 ```python
@@ -299,12 +299,12 @@ def execute_search_manuals(
     return {"sources": sources, "model_text": model_text}
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `uv run pytest tests/test_agent/test_tools.py -v`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/agent/tools.py tests/test_agent/test_tools.py
@@ -325,7 +325,7 @@ git commit -m "feat(agent): search_manuals tool over RetrievalService"
 - Produces: `AgentOrchestrator(chat_repo, job_repo, vehicle_repo, doc_repo, retrieval, provider, recent_messages_limit=6, max_iters=6)` with `run(job_id: int, user_message: str) -> Iterator[dict]` yielding events of types `token`, `tool_call`, `tool_result`, `sources`, `done`, `error`. Persists the user message and the final assistant message (+ `sources_json`).
 - Produces: `Settings.max_agent_iters: int = 6`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_agent/test_orchestrator.py`:
 ```python
@@ -412,19 +412,19 @@ def test_unknown_job_yields_error(db_session):
     assert events[0]["type"] == "error"
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `uv run pytest tests/test_agent/test_orchestrator.py -v`
 Expected: FAIL — `ModuleNotFoundError: app.agent.orchestrator`.
 
-- [ ] **Step 3: Add the config field**
+- [x] **Step 3: Add the config field**
 
 In `app/config.py`, add after `recent_messages`:
 ```python
     max_agent_iters: int = 6
 ```
 
-- [ ] **Step 4: Write the orchestrator**
+- [x] **Step 4: Write the orchestrator**
 
 Create `app/agent/orchestrator.py`:
 ```python
@@ -557,12 +557,12 @@ class AgentOrchestrator:
         return {"sources": [], "model_text": f"Unknown tool: {tc.name}"}
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `uv run pytest tests/test_agent/test_orchestrator.py -v`
 Expected: PASS (both tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/agent/orchestrator.py app/config.py tests/test_agent/test_orchestrator.py
@@ -587,7 +587,7 @@ git commit -m "feat(agent): orchestrator tool-calling loop with manual-grounded 
   - Schemas `ChatMessageIn{content: str}`, `ChatMessageOut{id, job_id, role, content, sources_json, created_utc}`.
   - Routes `POST /api/jobs/{job_id}/messages` → `text/event-stream`; `GET /api/jobs/{job_id}/messages` → message history.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/test_api/test_chat.py`:
 ```python
@@ -663,12 +663,12 @@ def test_chat_streams_events_and_persists(api_client, monkeypatch):
     assert rows[1]["content"] == "Use 5W-30."
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `uv run pytest tests/test_api/test_chat.py -v`
 Expected: FAIL — chat route not defined (404) / `make_chat_orchestrator` missing.
 
-- [ ] **Step 3: Add the factory**
+- [x] **Step 3: Add the factory**
 
 In `app/services/factories.py`, add these imports at the top (with the others):
 ```python
@@ -703,7 +703,7 @@ def make_chat_orchestrator(session, settings: Settings) -> AgentOrchestrator:
     )
 ```
 
-- [ ] **Step 4: Add the schemas**
+- [x] **Step 4: Add the schemas**
 
 Append to `app/api/schemas.py`:
 ```python
@@ -721,7 +721,7 @@ class ChatMessageOut(BaseModel):
     created_utc: datetime
 ```
 
-- [ ] **Step 5: Write the chat router**
+- [x] **Step 5: Write the chat router**
 
 Create `app/api/routers/chat.py`:
 ```python
@@ -769,7 +769,7 @@ def send_message(job_id: int, payload: ChatMessageIn, request: Request):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 ```
 
-- [ ] **Step 6: Include the router**
+- [x] **Step 6: Include the router**
 
 In `app/api/main.py`, add `chat` to the routers import and include it:
 ```python
@@ -782,17 +782,17 @@ from app.api.routers import vehicles, jobs, documents, chat
     app.include_router(chat.router)
 ```
 
-- [ ] **Step 7: Run the test to verify it passes**
+- [x] **Step 7: Run the test to verify it passes**
 
 Run: `uv run pytest tests/test_api/test_chat.py -v`
 Expected: PASS.
 
-- [ ] **Step 8: Run the full suite**
+- [x] **Step 8: Run the full suite**
 
 Run: `uv run pytest tests/ -v`
 Expected: PASS (all existing + new), pristine.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add app/services/factories.py app/api/schemas.py app/api/routers/chat.py app/api/main.py tests/test_api/test_chat.py
