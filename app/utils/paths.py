@@ -8,5 +8,5 @@ def get_document_path(
     document_id: int,
     filename: str,
 ) -> Path:
-    safe_name = filename.replace(" ", "_")
+    safe_name = Path(filename).name.replace(" ", "_") or "upload.pdf"
     return Path(docs_dir) / str(vehicle_id) / f"{document_id}_{safe_name}"

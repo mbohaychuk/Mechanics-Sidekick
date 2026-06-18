@@ -33,20 +33,28 @@ class DocumentService:
         self._embedding_service = embedding_service
         self._docs_dir = docs_dir
 
-    def add_document(self, vehicle_id: int, pdf_path: str, document_type: str = "service_manual") -> Document:
-        source = Path(pdf_path)
-        if not source.exists():
-            raise FileNotFoundError(f"PDF not found: {pdf_path}")
-
+    def register_document(
+        self, vehicle_id: int, file_name: str, document_type: str = "service_manual"
+    ) -> Document:
         doc = self._doc_repo.create(
             vehicle_id=vehicle_id,
-            file_name=source.name,
+            file_name=file_name,
             stored_path="",
             document_type=document_type,
         )
         self._doc_repo.session.flush()  # assigns doc.id
+        return doc
 
-        dest = get_document_path(self._docs_dir, vehicle_id, doc.id, source.name)
+    def process_document(self, doc_id: int, pdf_path: str) -> Document:
+        doc = self._doc_repo.get_by_id(doc_id)
+        if doc is None:
+            raise ValueError(f"Document {doc_id} not found")
+        source = Path(pdf_path)
+        if not source.exists():
+            self._doc_repo.update_status(doc.id, "failed")
+            raise FileNotFoundError(f"PDF not found: {pdf_path}")
+
+        dest = get_document_path(self._docs_dir, doc.vehicle_id, doc.id, doc.file_name)
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -59,7 +67,7 @@ class DocumentService:
             contexts = [
                 self._contextualization_service.generate_context(
                     chunk_content=c["content"],
-                    filename=source.name,
+                    filename=doc.file_name,
                     page_number=c.get("page_number"),
                     section_title=c.get("section_title"),
                     chunk_index=c["chunk_index"],
@@ -68,12 +76,9 @@ class DocumentService:
                 for c in raw_chunks
             ]
 
-            # Embed the fully enriched text: structural metadata + LLM context + content.
-            # section_title gives structural location; context gives semantic/variant signal.
-            # Original content is stored separately for clean display in source citations.
             contextualized_texts = [
                 (
-                    f"Document: {source.name} | "
+                    f"Document: {doc.file_name} | "
                     f"Section: {c.get('section_title') or 'Unknown'} | "
                     f"Page: {c.get('page_number', 'unknown')}\n"
                     f"{ctx}\n\n{c['content']}"
@@ -100,6 +105,15 @@ class DocumentService:
             raise RuntimeError(f"Document processing failed: {exc}") from exc
 
         return doc
+
+    def add_document(
+        self, vehicle_id: int, pdf_path: str, document_type: str = "service_manual"
+    ) -> Document:
+        source = Path(pdf_path)
+        if not source.exists():
+            raise FileNotFoundError(f"PDF not found: {pdf_path}")
+        doc = self.register_document(vehicle_id, source.name, document_type)
+        return self.process_document(doc.id, str(source))
 
     def list_documents(self, vehicle_id: int) -> list[Document]:
         return self._doc_repo.list_by_vehicle(vehicle_id)

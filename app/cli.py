@@ -157,27 +157,8 @@ def job_show(job_id: int):
 
 
 def _make_document_service(session):
-    from app.repositories.document_repository import DocumentRepository
-    from app.repositories.chunk_repository import ChunkRepository
-    from app.services.document_service import DocumentService
-    from app.services.pdf_service import PDFService
-    from app.services.structured_chunking_service import StructuredChunkingService
-    from app.services.contextualization_service import ContextualizationService
-    from app.services.embedding_service import EmbeddingService
-    from app.services.ollama_service import OllamaService
-
-    ollama_svc = OllamaService(settings.ollama_base_url)
-    context_svc = ContextualizationService(ollama_svc, settings.context_model)
-    embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
-    return DocumentService(
-        doc_repo=DocumentRepository(session),
-        chunk_repo=ChunkRepository(session),
-        pdf_service=PDFService(),
-        chunking_service=StructuredChunkingService(settings.chunk_size, settings.chunk_overlap),
-        contextualization_service=context_svc,
-        embedding_service=embedding_svc,
-        docs_dir=settings.docs_dir,
-    )
+    from app.services.factories import make_document_service
+    return make_document_service(session, settings)
 
 
 # ── Document commands ─────────────────────────────────────────────────────────

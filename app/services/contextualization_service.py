@@ -1,5 +1,5 @@
 # app/services/contextualization_service.py
-from app.services.ollama_service import OllamaService
+from app.services.llm_backend import LLMBackend
 
 
 class ContextualizationService:
@@ -11,8 +11,8 @@ class ContextualizationService:
     retrieval: retrieve precisely, even across multi-variant document sets.
     """
 
-    def __init__(self, ollama: OllamaService, model: str) -> None:
-        self._ollama = ollama
+    def __init__(self, backend: LLMBackend, model: str) -> None:
+        self._backend = backend
         self._model = model
 
     def generate_context(
@@ -41,4 +41,4 @@ class ContextualizationService:
             "Respond with only the sentences. No labels, no preamble."
         )
         messages = [{"role": "user", "content": prompt}]
-        return self._ollama.chat(messages, self._model)
+        return self._backend.chat(messages, self._model)

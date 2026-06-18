@@ -12,10 +12,15 @@ dependencies = [
     "rich>=13.0",
     "numpy>=1.26",
     "python-dotenv>=1.0",
+    "fastapi>=0.137.1",
+    "uvicorn[standard]>=0.49.0",
+    "openai>=2.43.0",
+    "python-multipart>=0.0.32",
 ]
 
 [project.scripts]
 mechanic-sidekick = "app.cli:app"
+mechanic-sidekick-api = "app.api.server:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -27,9 +32,11 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pytest>=8.0",
     "pytest-mock>=3.14",
 ]
