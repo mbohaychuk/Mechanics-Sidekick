@@ -22,6 +22,7 @@ import VehicleDetailView from '@/views/VehicleDetailView.vue'
 
 function mountAt(id: string) {
   const router = createRouter({ history: createMemoryHistory(), routes: [
+    { path: '/', name: 'home', component: { template: '<div/>' } },
     { path: '/vehicles/:id', name: 'vehicle', component: VehicleDetailView },
     { path: '/jobs/:id/chat', name: 'chat', component: { template: '<div/>' } },
   ] })

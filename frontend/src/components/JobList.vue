@@ -32,12 +32,9 @@ const statusConfig: Record<string, { cls: string; dot: string }> = {
   closed: { cls: 'text-muted border-border bg-surface-2',        dot: 'bg-muted/40' },
 }
 
-function formatDate(utc: string) {
-  try {
-    return new Date(utc).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  } catch {
-    return ''
-  }
+function formatDate(utc: string): string {
+  const date = new Date(utc)
+  return isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
 onMounted(load)
