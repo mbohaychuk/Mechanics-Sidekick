@@ -1,8 +1,6 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 from app.agent.mcp_host import ObdMcpHost
 
 STUB = str(Path(__file__).resolve().parents[1] / "fixtures" / "stub_mcp_server.py")
