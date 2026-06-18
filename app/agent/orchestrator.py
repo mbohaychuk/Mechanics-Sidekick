@@ -4,7 +4,12 @@ import json
 from collections.abc import Iterator
 
 from app.agent.provider import ChatProvider, ToolCall
-from app.agent.tools import SEARCH_MANUALS_TOOL, execute_search_manuals
+from app.agent.tools import (
+    SEARCH_MANUALS_TOOL,
+    WEB_SEARCH_TOOL,
+    execute_search_manuals,
+    execute_web_search,
+)
 from app.repositories.chat_repository import ChatRepository
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.job_repository import JobRepository
@@ -14,10 +19,15 @@ from app.services.retrieval_service import RetrievalService
 SYSTEM_PROMPT = (
     "You are Mechanic Sidekick, an expert assistant for automotive repair and maintenance. "
     "The vehicle is: {vehicle}. "
-    "Use the search_manuals tool to look up specifications, torque values, fluid types, and "
-    "procedures in the uploaded service manuals before answering factual questions. Never invent "
-    "specs or procedures — if the manuals do not cover it, say so plainly. Keep answers concise and "
-    "mechanic-friendly, and cite the source filename and page for any specification you give."
+    "You have tools: search_manuals (look up specifications, torque values, fluid types, and "
+    "procedures in the uploaded service manuals — prefer this for anything the manuals cover); "
+    "read-only OBD tools (read live data, trouble codes (DTCs), freeze frames, readiness monitors, "
+    "and vehicle info directly from the connected car); and web_search (the public web, for recalls, "
+    "bulletins, and information not in the manuals — use only when the manuals do not cover it). "
+    "Ground factual answers in the manuals or live readings; never invent specs or codes. When a "
+    "diagnostic code or reading needs interpretation, look it up in the manuals. If a needed tool is "
+    "unavailable (for example, no scanner is connected), say so plainly. Keep answers concise and "
+    "mechanic-friendly, and cite the source filename and page for any specification you quote."
 )
 
 
@@ -32,6 +42,9 @@ class AgentOrchestrator:
         provider: ChatProvider,
         recent_messages_limit: int = 6,
         max_iters: int = 6,
+        obd_host=None,
+        web_search_client=None,
+        web_search_max_results: int = 5,
     ) -> None:
         self._chat_repo = chat_repo
         self._job_repo = job_repo
@@ -41,6 +54,9 @@ class AgentOrchestrator:
         self._provider = provider
         self._recent_limit = recent_messages_limit
         self._max_iters = max_iters
+        self._obd_host = obd_host
+        self._web_search_client = web_search_client
+        self._web_search_max_results = web_search_max_results
 
     def run(self, job_id: int, user_message: str) -> Iterator[dict]:
         job = self._job_repo.get_by_id(job_id)
@@ -66,6 +82,10 @@ class AgentOrchestrator:
         messages.append({"role": "user", "content": user_message})
 
         tools = [SEARCH_MANUALS_TOOL]
+        if self._web_search_client is not None:
+            tools.append(WEB_SEARCH_TOOL)
+        if self._obd_host is not None and self._obd_host.available:
+            tools.extend(self._obd_host.openai_tools())
         sources: list[dict] = []
 
         for _ in range(self._max_iters):
@@ -96,8 +116,7 @@ class AgentOrchestrator:
                 for tc in turn.tool_calls:
                     yield {"type": "tool_call", "name": tc.name, "arguments": tc.arguments}
                     result = self._execute(tc, job.vehicle_id)
-                    if tc.name == "search_manuals":
-                        sources.extend(result["sources"])
+                    sources.extend(result.get("sources", []))
                     yield {"type": "tool_result", "name": tc.name}
                     messages.append(
                         {"role": "tool", "tool_call_id": tc.id, "content": result["model_text"]}
@@ -125,4 +144,12 @@ class AgentOrchestrator:
             return execute_search_manuals(
                 self._retrieval, self._doc_repo, vehicle_id, tc.arguments.get("query", "")
             )
+        if tc.name == "web_search" and self._web_search_client is not None:
+            return execute_web_search(
+                self._web_search_client,
+                tc.arguments.get("query", ""),
+                self._web_search_max_results,
+            )
+        if self._obd_host is not None and self._obd_host.handles(tc.name):
+            return {"sources": [], "model_text": self._obd_host.call(tc.name, tc.arguments)}
         return {"sources": [], "model_text": f"Unknown tool: {tc.name}"}

@@ -31,7 +31,7 @@ def _seed(db_session):
     db_session.flush()
 
 
-def _orchestrator(db_session, provider, max_iters=6):
+def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_client=None):
     retrieval = MagicMock()
     retrieval.retrieve.return_value = [
         (SimpleNamespace(document_id=1, page_number=10, content="Torque 40 Nm."), 0.9)
@@ -47,6 +47,8 @@ def _orchestrator(db_session, provider, max_iters=6):
         provider=provider,
         recent_messages_limit=6,
         max_iters=max_iters,
+        obd_host=obd_host,
+        web_search_client=web_search_client,
     )
 
 
@@ -126,3 +128,96 @@ def test_missing_vehicle(db_session):
 
     history = ChatRepository(db_session).list_by_job(job_id)
     assert history == []
+
+
+class CapturingProvider:
+    """Like FakeProvider, but records the tool names advertised on each turn."""
+
+    def __init__(self, turns):
+        self._turns = list(turns)
+        self.seen_tool_names = []
+
+    def stream_turn(self, messages, tools):
+        self.seen_tool_names.append([t["function"]["name"] for t in tools])
+        turn = self._turns.pop(0)
+        if turn.text and not turn.tool_calls:
+            yield {"type": "token", "text": turn.text}
+        yield {"type": "turn", "turn": turn}
+
+
+class FakeObdHost:
+    def __init__(self, available=True, tools=None, responses=None):
+        self.available = available
+        self._tools = tools or [
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_dtcs",
+                    "description": "",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        self._responses = responses or {"read_dtcs": '{"codes": ["P0301"]}'}
+        self.calls = []
+
+    def openai_tools(self):
+        return list(self._tools) if self.available else []
+
+    def handles(self, name):
+        return self.available and name in {t["function"]["name"] for t in self._tools}
+
+    def call(self, name, args):
+        self.calls.append((name, args))
+        return self._responses.get(name, "[obd error] unknown")
+
+
+def test_obd_tool_advertised_and_dispatched(db_session):
+    _seed(db_session)
+    host = FakeObdHost()
+    provider = CapturingProvider(
+        [
+            ProviderTurn(text="", tool_calls=[ToolCall("c1", "read_dtcs", {})]),
+            ProviderTurn(text="You have a P0301 misfire.", tool_calls=[]),
+        ]
+    )
+    orch = _orchestrator(db_session, provider, obd_host=host)
+
+    events = list(orch.run(job_id=1, user_message="any codes?"))
+    types = [e["type"] for e in events]
+
+    assert "read_dtcs" in provider.seen_tool_names[0]
+    assert "search_manuals" in provider.seen_tool_names[0]
+    assert host.calls == [("read_dtcs", {})]
+    assert "tool_call" in types and "tool_result" in types
+    history = ChatRepository(db_session).list_by_job(1)
+    assert history[1].content == "You have a P0301 misfire."
+
+
+def test_obd_unavailable_degrades_to_manuals_only(db_session):
+    _seed(db_session)
+    host = FakeObdHost(available=False)
+    provider = CapturingProvider([ProviderTurn(text="No scanner connected.", tool_calls=[])])
+    orch = _orchestrator(db_session, provider, obd_host=host)
+
+    list(orch.run(job_id=1, user_message="any codes?"))
+
+    assert provider.seen_tool_names[0] == ["search_manuals"]  # no OBD tools advertised
+
+
+def test_web_search_advertised_and_dispatched(db_session):
+    _seed(db_session)
+    web_client = MagicMock()
+    web_client.search.return_value = {"answer": "Known issue.", "results": []}
+    provider = CapturingProvider(
+        [
+            ProviderTurn(text="", tool_calls=[ToolCall("c1", "web_search", {"query": "recall"})]),
+            ProviderTurn(text="There is a recall.", tool_calls=[]),
+        ]
+    )
+    orch = _orchestrator(db_session, provider, web_search_client=web_client)
+
+    list(orch.run(job_id=1, user_message="any recalls?"))
+
+    assert "web_search" in provider.seen_tool_names[0]
+    web_client.search.assert_called_once()
