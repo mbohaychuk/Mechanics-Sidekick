@@ -48,3 +48,17 @@ class DocumentOut(BaseModel):
     document_type: str
     processing_status: str
     uploaded_utc: datetime
+
+
+class ChatMessageIn(BaseModel):
+    content: str
+
+
+class ChatMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    job_id: int
+    role: str
+    content: str
+    sources_json: str | None
+    created_utc: datetime

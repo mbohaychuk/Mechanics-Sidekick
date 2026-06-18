@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401 — register models with Base before create_all
-from app.api.routers import vehicles, jobs, documents
+from app.api.routers import vehicles, jobs, documents, chat
 from app.config import settings
 from app.db import Base, get_engine, get_session_factory
 
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(vehicles.router)
     app.include_router(jobs.router)
     app.include_router(documents.router)
+    app.include_router(chat.router)
 
     spa_dir = Path(settings.spa_dist_dir)
     if spa_dir.is_dir():
