@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 100
     top_k_chunks: int = 5
     recent_messages: int = 6
+    max_agent_iters: int = 6
     llm_provider: str = "openai"
     embed_provider: str = "openai"
     openai_api_key: str = ""
