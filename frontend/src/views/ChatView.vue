@@ -122,6 +122,7 @@ async function send() {
           <textarea
             v-model="draft"
             rows="2"
+            aria-label="Message"
             placeholder="Ask about this vehicle…"
             :disabled="streaming"
             class="w-full resize-none rounded-xl border border-border bg-bg px-3.5 py-2.5 font-sans text-sm text-text placeholder-muted/40 outline-none transition-colors duration-150 focus:border-accent/50 focus:ring-1 focus:ring-accent/20 disabled:opacity-50"

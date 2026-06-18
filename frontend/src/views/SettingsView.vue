@@ -155,7 +155,7 @@ function yn(v: boolean | undefined) {
 
           <div class="flex items-center justify-between bg-surface px-4 py-3">
             <span class="text-sm text-muted">OBD port</span>
-            <code class="rounded bg-surface-2 px-2 py-0.5 font-mono text-xs text-text">
+            <code class="rounded bg-surface-2 px-2 py-0.5 font-mono text-xs text-accent">
               {{ config.config.obd_port }}
             </code>
           </div>
