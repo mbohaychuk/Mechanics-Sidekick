@@ -80,6 +80,9 @@ class ObdMcpHost:
         call_timeout: float = 30.0,
         start_timeout: float = 20.0,
     ) -> None:
+        # Intentionally inherit the full parent environment so `uv`/the child can
+        # resolve PATH, HOME, and the obd-mcp venv; `env` only layers OBD_PORT on top.
+        # obd-mcp is a local, trusted process — revisit this scoping if it ever runs untrusted.
         merged_env = {**os.environ, **env} if env else None
         self._params = StdioServerParameters(command=command, args=list(args), env=merged_env)
         self._denylist = set(denylist or ())
