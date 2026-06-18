@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     cors_origin: str = "http://localhost:5173"
     spa_dist_dir: str = "frontend/dist"
     max_upload_bytes: int = 100 * 1024 * 1024
+    obd_mcp_enabled: bool = False
+    obd_mcp_dir: str = ""
+    obd_port: str = "socket://localhost:35000"
+    obd_tool_denylist: str = "ping,record_session"
+    mcp_call_timeout_s: float = 30.0
+    mcp_start_timeout_s: float = 20.0
+    web_search_enabled: bool = True
+    tavily_api_key: str = ""
+    web_search_max_results: int = 5
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
