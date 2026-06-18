@@ -1,6 +1,8 @@
+import json
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class VehicleCreate(BaseModel):
@@ -60,5 +62,12 @@ class ChatMessageOut(BaseModel):
     job_id: int
     role: str
     content: str
-    sources_json: str | None
+    sources_json: list[dict[str, Any]] | None
     created_utc: datetime
+
+    @field_validator("sources_json", mode="before")
+    @classmethod
+    def _parse_sources(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return json.loads(v)
+        return v

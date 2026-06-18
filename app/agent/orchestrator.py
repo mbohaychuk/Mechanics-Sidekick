@@ -54,6 +54,7 @@ class AgentOrchestrator:
 
         recent = self._chat_repo.list_by_job(job_id, limit=self._recent_limit)
         self._chat_repo.create(job_id=job_id, role="user", content=user_message)
+        self._chat_repo.session.commit()  # persist the user turn before any LLM call can fail
 
         vehicle_label = f"{vehicle.year} {vehicle.make} {vehicle.model}, engine {vehicle.engine}"
         messages: list[dict] = [

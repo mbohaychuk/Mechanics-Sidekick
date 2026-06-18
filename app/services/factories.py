@@ -1,3 +1,5 @@
+from sqlalchemy.orm import Session
+
 from app.agent.orchestrator import AgentOrchestrator
 from app.agent.provider import OpenAIProvider
 from app.config import Settings
@@ -16,7 +18,7 @@ from app.services.retrieval_service import RetrievalService
 from app.services.structured_chunking_service import StructuredChunkingService
 
 
-def make_document_service(session, settings: Settings) -> DocumentService:
+def make_document_service(session: Session, settings: Settings) -> DocumentService:
     return DocumentService(
         doc_repo=DocumentRepository(session),
         chunk_repo=ChunkRepository(session),
@@ -30,7 +32,7 @@ def make_document_service(session, settings: Settings) -> DocumentService:
     )
 
 
-def make_chat_orchestrator(session, settings: Settings) -> AgentOrchestrator:
+def make_chat_orchestrator(session: Session, settings: Settings) -> AgentOrchestrator:
     retrieval = RetrievalService(
         ChunkRepository(session),
         make_embedding_service(settings),

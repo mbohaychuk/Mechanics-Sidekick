@@ -44,8 +44,10 @@ class OpenAIProvider:
         text_parts: list[str] = []
         acc: dict[int, dict] = {}
         for chunk in stream:
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta
-            # None = no content delta; "" is a no-op chunk and is skipped
+            # OpenAI emits content=None on tool-only chunks and content="" on role-header chunks; skip both
             if getattr(delta, "content", None):
                 text_parts.append(delta.content)
                 yield {"type": "token", "text": delta.content}

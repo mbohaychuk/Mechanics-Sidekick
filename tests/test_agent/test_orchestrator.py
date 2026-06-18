@@ -12,7 +12,7 @@ from app.repositories.document_repository import DocumentRepository
 
 
 class FakeProvider:
-    """Yields scripted turns: first a search_manuals tool call, then a final answer."""
+    """Replays a fixed list of ProviderTurn objects, one per stream_turn call."""
 
     def __init__(self, turns):
         self._turns = list(turns)
@@ -80,6 +80,7 @@ def test_unknown_job_yields_error(db_session):
     orch = _orchestrator(db_session, provider)
     events = list(orch.run(job_id=999, user_message="x"))
     assert events[0]["type"] == "error"
+    assert ChatRepository(db_session).list_by_job(999) == []
 
 
 class InfiniteToolCallProvider:
@@ -95,7 +96,6 @@ class InfiniteToolCallProvider:
 
 
 def test_iteration_cap(db_session):
-    """Orchestrator hits max_iters, persists fallback, yields error."""
     _seed(db_session)
     provider = InfiniteToolCallProvider()
     orch = _orchestrator(db_session, provider, max_iters=2)
@@ -113,7 +113,6 @@ def test_iteration_cap(db_session):
 
 
 def test_missing_vehicle(db_session):
-    """Job with dangling vehicle_id yields error, persists nothing."""
     db_session.add(Job(vehicle_id=999, title="x"))
     db_session.flush()
     job_id = db_session.query(Job).filter_by(vehicle_id=999).first().id

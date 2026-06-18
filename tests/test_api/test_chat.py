@@ -68,3 +68,18 @@ def test_chat_streams_events_and_persists(api_client, monkeypatch):
     rows = history.json()
     assert [m["role"] for m in rows] == ["user", "assistant"]
     assert rows[1]["content"] == "Use 5W-30."
+
+
+def test_chat_error_event_on_orchestrator_failure(api_client, monkeypatch):
+    _seed_vehicle_job(api_client)
+
+    class _Boom:
+        def run(self, *a, **k):
+            raise RuntimeError("kaboom")
+            yield  # make it a generator
+
+    monkeypatch.setattr("app.api.routers.chat.make_chat_orchestrator", lambda session, settings: _Boom())
+    r = api_client.post("/api/jobs/1/messages", json={"content": "x"})
+    assert r.status_code == 200
+    assert '"type": "error"' in r.text
+    assert "An internal error occurred." in r.text

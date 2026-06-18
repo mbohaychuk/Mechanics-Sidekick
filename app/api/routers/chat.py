@@ -1,4 +1,5 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -10,6 +11,7 @@ from app.config import settings
 from app.repositories.chat_repository import ChatRepository
 from app.services.factories import make_chat_orchestrator
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
@@ -26,6 +28,8 @@ def list_messages(job_id: int, session: Session = Depends(get_session)):
 def send_message(job_id: int, payload: ChatMessageIn, request: Request):
     session_factory = request.app.state.session_factory
 
+    # get_session can't be used here: FastAPI closes Depends() generator sessions when the
+    # handler returns, which is before the StreamingResponse body is iterated. Own the session.
     def event_stream():
         session = session_factory()
         try:
@@ -33,8 +37,9 @@ def send_message(job_id: int, payload: ChatMessageIn, request: Request):
             for event in orchestrator.run(job_id, payload.content):
                 yield _sse(event)
             session.commit()
-        except Exception as exc:  # surface, don't crash the stream
-            yield _sse({"type": "error", "detail": str(exc)})
+        except Exception:
+            logger.exception("Unhandled error in chat stream for job %s", job_id)
+            yield _sse({"type": "error", "detail": "An internal error occurred."})
             session.rollback()
         finally:
             session.close()
