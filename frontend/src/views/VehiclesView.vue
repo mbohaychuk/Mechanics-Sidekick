@@ -23,7 +23,7 @@ function open(id: number) {
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl px-6 py-8">
+  <main class="mx-auto max-w-4xl px-6 py-8">
 
     <!-- Page header -->
     <div class="mb-8 flex items-baseline justify-between">
@@ -90,7 +90,7 @@ function open(id: number) {
 
     <!-- Empty state -->
     <div
-      v-else-if="!store.loading && store.vehicles.length === 0"
+      v-else-if="store.vehicles.length === 0"
       class="flex flex-col items-center justify-center rounded-card border border-dashed border-border py-16 text-center"
     >
       <svg
@@ -148,5 +148,5 @@ function open(id: number) {
       </li>
     </ul>
 
-  </div>
+  </main>
 </template>

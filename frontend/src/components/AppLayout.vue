@@ -57,8 +57,8 @@ import ScannerBadge from '@/components/ScannerBadge.vue'
     </header>
 
     <!-- Page content -->
-    <main class="flex-1">
+    <div class="flex-1">
       <router-view />
-    </main>
+    </div>
   </div>
 </template>
