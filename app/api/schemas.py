@@ -23,3 +23,18 @@ class VehicleOut(BaseModel):
     vin: str | None
     notes: str | None
     created_utc: datetime
+
+
+class JobCreate(BaseModel):
+    title: str
+    description: str | None = None
+
+
+class JobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    vehicle_id: int
+    title: str
+    description: str | None
+    status: str
+    created_utc: datetime
