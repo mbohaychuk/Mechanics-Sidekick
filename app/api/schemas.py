@@ -38,3 +38,13 @@ class JobOut(BaseModel):
     description: str | None
     status: str
     created_utc: datetime
+
+
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    vehicle_id: int
+    file_name: str
+    document_type: str
+    processing_status: str
+    uploaded_utc: datetime
