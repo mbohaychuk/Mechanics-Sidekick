@@ -78,7 +78,10 @@ def test_chat_error_event_on_orchestrator_failure(api_client, monkeypatch):
             raise RuntimeError("kaboom")
             yield  # make it a generator
 
-    monkeypatch.setattr("app.api.routers.chat.make_chat_orchestrator", lambda session, settings: _Boom())
+    monkeypatch.setattr(
+        "app.api.routers.chat.make_chat_orchestrator",
+        lambda session, settings, obd_host=None: _Boom(),
+    )
     r = api_client.post("/api/jobs/1/messages", json={"content": "x"})
     assert r.status_code == 200
     assert '"type": "error"' in r.text

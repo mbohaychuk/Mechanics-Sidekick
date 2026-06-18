@@ -33,7 +33,8 @@ def send_message(job_id: int, payload: ChatMessageIn, request: Request):
     def event_stream():
         session = session_factory()
         try:
-            orchestrator = make_chat_orchestrator(session, settings)
+            obd_host = getattr(request.app.state, "obd_host", None)
+            orchestrator = make_chat_orchestrator(session, settings, obd_host=obd_host)
             for event in orchestrator.run(job_id, payload.content):
                 yield _sse(event)
             session.commit()
