@@ -7,7 +7,7 @@
 
 Mechanics Sidekick today is a local Typer CLI: a vehicle → documents (PDFs) → job → chat RAG flow, Ollama for chat + embeddings, SQLite via SQLAlchemy, brute-force cosine retrieval. This design moves it to a browser app and turns the chat into an **agentic, tool-using assistant** that can read the car live through the separate `obd-mcp` project, ground answers in the uploaded manuals, and search the web.
 
-`obd-mcp` (`~/repos/OBD-II-MCP-Server`, v0.1.0, 117 tests) is a generic MCP server exposing live OBD-II data (DTCs, PIDs, freeze frames, NHTSA recalls) as tools. It is consumed by *any* MCP host. **Sidekick becomes one such host** — it connects to `obd-mcp` over stdio the same way Claude Desktop or Cursor would. `obd-mcp` stays oblivious to who calls it. (`obd-mcp`'s optional `SIDEKICK_URL`/`repair-lookup` reverse path is explicitly out of scope here.)
+`obd-mcp` (`~/repos/OBD-II-MCP-Server`, v0.1.0, 117 tests) is a generic MCP server exposing live OBD-II data (DTCs, PIDs, freeze frames, NHTSA recalls) as tools. It is consumed by *any* MCP host. **Sidekick becomes one such host** — it connects to `obd-mcp` over stdio the same way any standard MCP host would. `obd-mcp` stays oblivious to who calls it. (`obd-mcp`'s optional `SIDEKICK_URL`/`repair-lookup` reverse path is explicitly out of scope here.)
 
 ## The three-phase vision
 

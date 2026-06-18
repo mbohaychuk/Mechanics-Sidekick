@@ -1,7 +1,5 @@
 # Phase 1 — Backend Foundation & Management API — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Stand up a FastAPI backend that exposes the existing vehicle → document → job workflow over HTTP, with OpenAI-backed embeddings/contextualization and browser-upload background ingestion — no chat yet.
 
 **Architecture:** A new `app/api/` package wraps the existing, unchanged service/repository layer. The engine and a session factory live on `app.state`; a per-request dependency yields a committing session. OpenAI replaces Ollama behind a small config-driven factory that reuses the existing `EmbeddingService`/`ContextualizationService` unchanged. Document upload registers a row synchronously and processes it in a FastAPI background task.
@@ -17,7 +15,7 @@ This is the first of four Phase 1 plans (foundation → agentic chat → MCP hos
 - Default providers: chat + embeddings = OpenAI. Embedding model `text-embedding-3-small` (1536-dim) — **incompatible with existing `nomic-embed-text` (768-dim) chunks; previously ingested documents must be re-ingested.**
 - Tests never hit the network: OpenAI and any LLM backend are mocked with `MagicMock(spec=…)`, matching the existing test convention.
 - Run the full suite with `uv run pytest tests/ -v`. The existing Typer CLI and its tests must stay green.
-- No AI/Claude attribution in commit messages.
+- Keep commit messages plain and authored in the conventional-commit style already used in this repo.
 
 ---
 
