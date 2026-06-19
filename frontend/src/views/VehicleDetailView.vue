@@ -58,6 +58,13 @@ onMounted(async () => {
       <p v-if="vehicle.notes" class="mt-2 max-w-prose text-sm text-muted">
         {{ vehicle.notes }}
       </p>
+      <!-- Live telemetry entry -->
+      <RouterLink
+        :to="{ name: 'live', params: { id: vehicleId } }"
+        class="mt-3 inline-flex items-center gap-1.5 rounded bg-surface-2 px-3 py-1.5 font-mono text-xs text-accent hover:bg-surface"
+      >
+        ● Live data
+      </RouterLink>
     </div>
 
     <!-- Divider with label -->
