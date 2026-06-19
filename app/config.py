@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     web_search_enabled: bool = True
     tavily_api_key: str = ""
     web_search_max_results: int = 5
+    live_sample_hz: float = 1.0
+    live_min_interval_s: float = 0.25
+    live_max_pids: int = 16
+    live_subscriber_queue: int = 2
+    live_recorder_batch: int = 20
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
