@@ -32,7 +32,9 @@ def make_document_service(session: Session, settings: Settings) -> DocumentServi
     )
 
 
-def make_chat_orchestrator(session: Session, settings: Settings) -> AgentOrchestrator:
+def make_chat_orchestrator(
+    session: Session, settings: Settings, obd_host=None
+) -> AgentOrchestrator:
     retrieval = RetrievalService(
         ChunkRepository(session),
         make_embedding_service(settings),
@@ -42,6 +44,11 @@ def make_chat_orchestrator(session: Session, settings: Settings) -> AgentOrchest
         api_key=settings.openai_api_key or None,
         model=settings.openai_chat_model,
     )
+    web_search_client = None
+    if settings.web_search_enabled and settings.tavily_api_key:
+        from tavily import TavilyClient
+
+        web_search_client = TavilyClient(api_key=settings.tavily_api_key)
     return AgentOrchestrator(
         chat_repo=ChatRepository(session),
         job_repo=JobRepository(session),
@@ -51,4 +58,7 @@ def make_chat_orchestrator(session: Session, settings: Settings) -> AgentOrchest
         provider=provider,
         recent_messages_limit=settings.recent_messages,
         max_iters=settings.max_agent_iters,
+        obd_host=obd_host,
+        web_search_client=web_search_client,
+        web_search_max_results=settings.web_search_max_results,
     )
