@@ -3,6 +3,7 @@ import json
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 — register models
 from app.config import Settings
@@ -14,14 +15,22 @@ from app.telemetry.manager import LiveSessionConflict, TelemetryManager
 
 
 class FakeHost:
-    """Async OBD host stub: get_vehicle_info returns a VIN; read_live_data echoes values."""
+    """Async OBD host stub: get_vehicle_info returns a VIN; read_live_data echoes values.
 
-    def __init__(self, vin="WAUZZZ", available=True):
+    Pass vin_error=True to simulate a VIN read failure (get_vehicle_info returns an OBD
+    error sentinel so parse_vin raises LiveReadError). read_live_data still works so the
+    sampler can stream samples normally.
+    """
+
+    def __init__(self, vin="WAUZZZ", available=True, vin_error=False):
         self.available = available
         self._vin = vin
+        self._vin_error = vin_error
 
     async def call_async(self, name, args):
         if name == "get_vehicle_info":
+            if self._vin_error:
+                return "[obd error] no link"
             return json.dumps({"vin": self._vin})
         if name == "read_live_data":
             return json.dumps([{"name": p, "value": 1, "unit": "x"} for p in args["pids"]])
@@ -29,7 +38,11 @@ class FakeHost:
 
 
 def _factory():
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine, expire_on_commit=False)
 
@@ -107,3 +120,31 @@ def test_second_vehicle_while_active_conflicts():
             await mgr.unsubscribe(sub_a)
 
     assert asyncio.run(scenario()) == a
+
+
+def test_vin_read_error_does_not_block_session():
+    """A VIN-check read failure (LiveReadError) must not prevent subscribe from succeeding.
+    mismatch must be None and the session must stream samples and close cleanly."""
+    factory = _factory()
+    vid = _seed_vehicle(factory, "WAUZZZ")
+    settings = Settings(_env_file=None)
+
+    async def scenario():
+        mgr = TelemetryManager(FakeHost(vin_error=True), factory, settings)
+        session_id, sub, mismatch = await mgr.subscribe(vid, ["RPM"])
+        assert mismatch is None  # read failure → no mismatch detail
+        ev = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
+        assert ev["type"] == "sample"
+        await asyncio.sleep(0.05)  # let a few ticks persist before drain
+        await mgr.unsubscribe(sub)
+        return session_id
+
+    session_id = asyncio.run(scenario())
+
+    s = factory()
+    try:
+        row = LiveSessionRepository(s).get_by_id(session_id)
+        assert row.status == "ended"
+        assert row.sample_count >= 1
+    finally:
+        s.close()

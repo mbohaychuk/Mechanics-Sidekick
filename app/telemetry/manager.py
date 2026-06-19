@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from app.config import Settings
+from app.models.vehicle import Vehicle
 from app.repositories.live_session_repository import LiveSessionRepository
 from app.telemetry.parse import LiveReadError, parse_live_data, parse_vin
 from app.telemetry.recorder import Recorder
@@ -43,8 +44,6 @@ class TelemetryManager:
             return None, None
         session = self._session_factory()
         try:
-            from app.models.vehicle import Vehicle
-
             vehicle = session.get(Vehicle, vehicle_id)
             vehicle_vin = vehicle.vin if vehicle else None
         finally:

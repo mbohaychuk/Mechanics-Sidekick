@@ -54,16 +54,11 @@ class Recorder:
             await self._flush(buf)
 
     async def _flush(self, buf: list[dict]) -> None:
-        # Session + connection are acquired here (event-loop thread) so that
-        # SingletonThreadPool assigns the connection from THIS thread's slot —
-        # the slot that has the tables. check_same_thread=False then allows the
-        # executor thread to use the already-checked-out connection safely.
-        session = self._session_factory()
-        session.connection()  # force checkout on the event-loop thread
-        await asyncio.get_event_loop().run_in_executor(None, self._write_batch, session, buf)
+        await asyncio.get_running_loop().run_in_executor(None, self._write_batch, buf)
         self._written += len(buf)
 
-    def _write_batch(self, session, buf: list[dict]) -> None:
+    def _write_batch(self, buf: list[dict]) -> None:
+        session = self._session_factory()
         try:
             LiveSampleRepository(session).bulk_create(
                 [{"session_id": self._session_id, **s} for s in buf]
