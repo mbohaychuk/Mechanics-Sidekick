@@ -67,3 +67,52 @@ export interface AppConfig {
   chat_model: string
   embed_model: string
 }
+
+export interface LiveValue {
+  value: number | string | null
+  unit: string | null
+}
+
+export interface LiveSampleEvent {
+  type: 'sample'
+  seq: number
+  t: number
+  hz: number
+  values: Record<string, LiveValue | null>
+}
+
+export type LiveEvent =
+  | { type: 'session'; session_id: number; target_hz: number }
+  | LiveSampleEvent
+  | { type: 'vin_mismatch'; detail: string }
+  | { type: 'disconnected'; detail: string }
+  | { type: 'error'; detail: string }
+  | { type: 'done' }
+
+export interface SupportedPid {
+  pid: string
+  name: string
+  description: string
+}
+
+export interface SupportedPids {
+  available: boolean
+  curated: string[]
+  supported: SupportedPid[]
+}
+
+export interface LiveSessionSummary {
+  id: number
+  vehicle_id: number
+  status: string
+  started_utc: string
+  ended_utc: string | null
+  achieved_hz: number | null
+  sample_count: number
+  pids: string[]
+}
+
+export interface LiveSessionDetail {
+  session: { id: number; vehicle_id: number; status: string; pids: string[]; sample_count: number }
+  samples: { seq: number; t: number; values: Record<string, LiveValue | null> }[]
+}
