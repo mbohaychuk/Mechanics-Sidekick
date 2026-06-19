@@ -71,3 +71,13 @@ class ChatMessageOut(BaseModel):
         if isinstance(v, str):
             return json.loads(v)
         return v
+
+
+class ConfigOut(BaseModel):
+    openai_key_present: bool
+    obd_mcp_enabled: bool
+    obd_port: str
+    web_search_enabled: bool
+    web_search_key_present: bool
+    chat_model: str
+    embed_model: str

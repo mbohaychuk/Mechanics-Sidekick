@@ -210,3 +210,8 @@ data/documents/*
 !data/documents/.gitkeep
 
 # Local editor config
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
