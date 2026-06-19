@@ -4,8 +4,10 @@ import type { LiveEvent, LiveValue } from '@/api/types'
 
 const WINDOW = 120
 
+type LiveStatus = 'idle' | 'connecting' | 'streaming' | 'error'
+
 export function useLiveSession(vehicleId: number) {
-  const status = ref<'idle' | 'connecting' | 'streaming' | 'error'>('idle')
+  const status = ref<LiveStatus>('idle')
   const detail = ref('')
   const vinMismatch = ref<string | null>(null)
   const achievedHz = ref(0)
@@ -48,8 +50,8 @@ export function useLiveSession(vehicleId: number) {
     try {
       await streamLive(vehicleId, pids, onEvent, controller.signal)
       // Stream ended cleanly — set idle unless an error event already set error state.
-      // Read via indexer to avoid TS narrowing the ref to its assignment-time literal type.
-      if ((status as { value: string }).value !== 'error') status.value = 'idle'
+      const current = status.value as LiveStatus
+      if (current !== 'error') status.value = 'idle'
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
         status.value = 'idle'
@@ -63,7 +65,8 @@ export function useLiveSession(vehicleId: number) {
   function stop() {
     controller?.abort()
     controller = null
-    if (status.value !== 'error') status.value = 'idle'
+    const current = status.value as LiveStatus
+    if (current !== 'error') status.value = 'idle'
   }
 
   return { status, detail, vinMismatch, achievedHz, sessionId, activePids, latest, series, start, stop }
