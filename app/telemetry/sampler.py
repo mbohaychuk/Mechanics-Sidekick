@@ -89,7 +89,7 @@ class TelemetrySampler:
                 started = time.monotonic()
                 values = await self._call_live(pids)
                 dt = time.monotonic() - started
-                self.achieved_hz = round(1.0 / dt, 2) if dt > 0 else 0.0
+                self.achieved_hz = round(1.0 / max(dt, self._interval), 2)
                 self._seq += 1
                 t_offset_ms = int((time.monotonic() - self._t0) * 1000)
                 self._persist({"seq": self._seq, "t_offset_ms": t_offset_ms, "values": values})

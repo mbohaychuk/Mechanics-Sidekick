@@ -22,13 +22,15 @@ def test_sampler_reads_union_persists_and_fans_out():
         ev_a = await asyncio.wait_for(a.queue.get(), timeout=1.0)
         ev_b = await asyncio.wait_for(b.queue.get(), timeout=1.0)
         await sampler.stop()
-        return ev_a, ev_b
+        return ev_a, ev_b, sampler.achieved_hz
 
-    ev_a, ev_b = asyncio.run(scenario())
+    ev_a, ev_b, achieved_hz = asyncio.run(scenario())
     assert ev_a["type"] == "sample"
     assert set(ev_a["values"]) == {"RPM"}            # filtered to A's PIDs
     assert set(ev_b["values"]) == {"RPM", "SPEED"}   # filtered to B's PIDs
     assert persisted and set(persisted[0]["values"]) == {"RPM", "SPEED"}  # union persisted
+    assert set(persisted[0]) == {"seq", "t_offset_ms", "values"}          # persisted sample shape
+    assert achieved_hz > 0                                                 # effective rate is positive
 
 
 def test_subscriber_offer_is_latest_wins():
