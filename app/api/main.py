@@ -9,9 +9,10 @@ from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401 — register models with Base before create_all
 from app.agent.mcp_host import build_obd_host
-from app.api.routers import vehicles, jobs, documents, chat, scanner, config
+from app.api.routers import vehicles, jobs, documents, chat, scanner, config, telemetry
 from app.config import settings
 from app.db import Base, get_engine, get_session_factory
+from app.telemetry.manager import TelemetryManager
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +32,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_db(app, f"sqlite:///{db_path}")
 
     app.state.obd_host = None
+    app.state.telemetry_manager = None
     if settings.obd_mcp_enabled:
         host = build_obd_host(settings)
         if not host.start():
             logger.warning("OBD MCP host failed to start; chat will run without OBD tools")
         app.state.obd_host = host
+        if host.available:
+            app.state.telemetry_manager = TelemetryManager(
+                host, app.state.session_factory, settings
+            )
 
     try:
         yield
     finally:
         host = getattr(app.state, "obd_host", None)
-        if host is not None:
+        if host is not None and hasattr(host, "stop"):
             host.stop()
 
 
@@ -65,6 +71,7 @@ def create_app() -> FastAPI:
     app.include_router(chat.router)
     app.include_router(scanner.router)
     app.include_router(config.router)
+    app.include_router(telemetry.router)
 
     spa_dir = Path(settings.spa_dist_dir)
     if spa_dir.is_dir():
