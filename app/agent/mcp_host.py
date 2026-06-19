@@ -97,6 +97,7 @@ class ObdMcpHost:
         self._available = False
         self._ready = threading.Event()
         self._start_error: BaseException | None = None
+        self._lock: asyncio.Lock | None = None
 
     def start(self) -> bool:
         self._thread = threading.Thread(target=self._run_loop, name="obd-mcp", daemon=True)
@@ -128,6 +129,7 @@ class ObdMcpHost:
 
     async def _connect(self) -> None:
         try:
+            self._lock = asyncio.Lock()
             self._stack = AsyncExitStack()
             read, write = await asyncio.wait_for(
                 self._stack.enter_async_context(stdio_client(self._params)),
@@ -175,8 +177,24 @@ class ObdMcpHost:
             return f"[tool error] {name}: {exc}"
 
     async def _call_async(self, name: str, args: dict) -> str:
-        result = await self._session.call_tool(name, args)
+        assert self._lock is not None
+        async with self._lock:
+            result = await self._session.call_tool(name, args)
         return result_to_text(result)
+
+    async def call_async(self, name: str, args: dict) -> str:
+        if not self.available:
+            return "[obd unavailable] The OBD tool server is not running."
+        if name not in self._allowed:
+            return f"[obd error] Tool '{name}' is not available."
+        if self._loop is None or self._loop.is_closed():
+            return "[obd unavailable] The OBD tool server is not running."
+        future = asyncio.run_coroutine_threadsafe(self._call_async(name, args), self._loop)
+        try:
+            return await asyncio.wait_for(asyncio.wrap_future(future), self._call_timeout)
+        except Exception as exc:
+            logger.exception("OBD tool %s failed (async)", name)
+            return f"[tool error] {name}: {exc}"
 
     def stop(self) -> None:
         loop = self._loop

@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from pathlib import Path
 
@@ -39,5 +40,39 @@ def test_denylist_drops_named_tool():
     assert host.start() is True
     try:
         assert host.openai_tools() == []  # echo denylisted, wipe destructive
+    finally:
+        host.stop()
+
+
+def test_call_async_returns_result_against_stub():
+    host = ObdMcpHost(command=sys.executable, args=[STUB], start_timeout=20.0)
+    assert host.start() is True
+    try:
+        out = asyncio.run(host.call_async("echo", {"text": "live"}))
+        assert "echo:live" in out
+    finally:
+        host.stop()
+
+
+def test_call_async_serializes_concurrent_calls():
+    host = ObdMcpHost(command=sys.executable, args=[STUB], start_timeout=20.0)
+    assert host.start() is True
+    try:
+        async def hammer():
+            return await asyncio.gather(*[host.call_async("echo", {"text": str(i)}) for i in range(5)])
+
+        results = asyncio.run(hammer())
+        # all five complete and return their own value — no interleaved/garbled frames
+        assert sorted(r.split("echo:")[1] for r in results) == ["0", "1", "2", "3", "4"]
+    finally:
+        host.stop()
+
+
+def test_call_async_degrades_when_unavailable():
+    host = ObdMcpHost(command="/nonexistent-binary-xyz", args=[], start_timeout=5.0)
+    try:
+        assert host.start() is False
+        out = asyncio.run(host.call_async("echo", {"text": "x"}))
+        assert out.startswith("[obd unavailable]")
     finally:
         host.stop()
