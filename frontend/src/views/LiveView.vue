@@ -41,7 +41,7 @@ function toggleStart() {
   else live.start(selected.value)
 }
 function addPid(name: string) {
-  if (!selected.value.includes(name)) selected.value.push(name)
+  if (name && !selected.value.includes(name)) selected.value.push(name)
 }
 function removePid(name: string) {
   selected.value = selected.value.filter((p) => p !== name)

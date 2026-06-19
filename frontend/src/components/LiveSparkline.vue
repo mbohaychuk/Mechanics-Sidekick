@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import VChart from 'vue-echarts'
+import '@/echarts'
 import type { ECOption } from '@/echarts'
 
 const props = defineProps<{ points: [number, number][] }>()
