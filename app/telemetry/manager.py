@@ -30,6 +30,10 @@ class TelemetryManager:
         self._session_id: int | None = None
         self.active_vehicle_id: int | None = None
 
+    @property
+    def target_hz(self) -> float:
+        return self._settings.live_sample_hz
+
     def _make_call_live(self):
         async def call_live(pids: list[str]) -> dict:
             return parse_live_data(await self._host.call_async("read_live_data", {"pids": pids}))

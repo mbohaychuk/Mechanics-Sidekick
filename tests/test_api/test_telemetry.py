@@ -53,7 +53,7 @@ def _install_manager(api_client):
     )
 
 
-def test_supported_pids(api_client, monkeypatch):
+def test_supported_pids(api_client):
     _seed_vehicle(api_client)
     api_client.app.state.obd_host = _FakeHost()
     r = api_client.get("/api/vehicles/1/supported-pids")

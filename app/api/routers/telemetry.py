@@ -54,7 +54,7 @@ async def live(vehicle_id: int, pids: str, request: Request):
 
     async def stream():
         try:
-            yield _sse({"type": "session", "session_id": session_id, "target_hz": manager._settings.live_sample_hz})
+            yield _sse({"type": "session", "session_id": session_id, "target_hz": manager.target_hz})
             if mismatch:
                 yield _sse({"type": "vin_mismatch", "detail": mismatch})
             while True:
