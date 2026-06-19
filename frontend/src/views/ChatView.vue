@@ -18,7 +18,7 @@ const jobId = Number(route.params.id)
 const turns = ref<Turn[]>([])
 const draft = ref('')
 const streaming = ref(false)
-const activeTools = ref<string[]>([])
+const activeTools = ref<{ name: string; done: boolean }[]>([])
 const scrollAnchor = ref<HTMLElement | null>(null)
 
 function scrollBottom() {
@@ -54,7 +54,10 @@ async function send() {
         assistant.content += e.text
         scrollBottom()
       } else if (e.type === 'tool_call') {
-        activeTools.value.push(e.name)
+        activeTools.value.push({ name: e.name, done: false })
+      } else if (e.type === 'tool_result') {
+        const chip = activeTools.value.find((t) => t.name === e.name && !t.done)
+        if (chip) chip.done = true
       } else if (e.type === 'sources') {
         assistant.sources = e.sources
       } else if (e.type === 'error') {
@@ -101,7 +104,7 @@ async function send() {
         <!-- Tool activity row — shown while tools are active -->
         <div v-if="activeTools.length" class="mb-4 flex flex-wrap items-center gap-1.5 pl-1">
           <span class="font-mono text-[0.65rem] uppercase tracking-widest text-muted/40">tools</span>
-          <ToolChip v-for="(name, i) in activeTools" :key="i" :name="name" :active="streaming" />
+          <ToolChip v-for="(tool, i) in activeTools" :key="i" :name="tool.name" :active="!tool.done" />
         </div>
 
         <!-- Streaming indicator pulse when no text yet -->
