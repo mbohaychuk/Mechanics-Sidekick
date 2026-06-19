@@ -12,6 +12,7 @@ vi.mock('@/api/client', () => ({
       available: true, curated: ['RPM', 'SPEED'],
       supported: [{ pid: '0C', name: 'RPM', description: 'Engine RPM' }, { pid: '0D', name: 'SPEED', description: 'Speed' }],
     }),
+    listLiveSessions: vi.fn().mockResolvedValue([]),
   },
 }))
 

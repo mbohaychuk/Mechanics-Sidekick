@@ -6,6 +6,7 @@ import { useLiveSession } from '@/composables/useLiveSession'
 import type { SupportedPid } from '@/api/types'
 import LiveSparkline from '@/components/LiveSparkline.vue'
 import LiveFocusChart from '@/components/LiveFocusChart.vue'
+import SessionHistory from '@/components/SessionHistory.vue'
 
 const route = useRoute()
 const vehicleId = Number(route.params.id)
@@ -60,6 +61,11 @@ function fmt(name: string): string {
 const isStreaming = computed(
   () => live.status.value === 'streaming' || live.status.value === 'connecting',
 )
+
+const replaySeries = ref<{ name: string; points: [number, number][] }[]>([])
+function onReplay(series: { name: string; points: [number, number][] }[]) {
+  replaySeries.value = series
+}
 </script>
 
 <template>
@@ -285,6 +291,12 @@ const isStreaming = computed(
     <p v-if="!available && supported.length === 0" class="mt-6 text-center font-mono text-xs text-muted/30">
       No OBD scanner detected. Connect a scanner and reload.
     </p>
+
+    <!-- Past session history + replay -->
+    <div class="mt-8">
+      <SessionHistory :vehicle-id="vehicleId" @replay="onReplay" />
+      <LiveFocusChart v-if="replaySeries.length" class="mt-3" :series="replaySeries" />
+    </div>
 
   </main>
 </template>
