@@ -171,3 +171,12 @@ def test_live_stream_without_manager_emits_error(api_client):
     with api_client.stream("GET", "/api/vehicles/1/live?pids=RPM") as r:
         body = r.read().decode()
     assert '"type": "error"' in body or '"type":"error"' in body
+
+
+def test_live_conflict_returns_409(api_client):
+    _seed_vehicle(api_client)
+    _install_manager(api_client)
+    # Simulate a session already active for a different vehicle (pre-check 409 path).
+    api_client.app.state.telemetry_manager.active_vehicle_id = 999
+    r = api_client.get("/api/vehicles/1/live?pids=RPM")
+    assert r.status_code == 409

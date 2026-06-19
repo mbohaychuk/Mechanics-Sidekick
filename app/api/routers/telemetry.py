@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session
+from app.config import settings
 from app.telemetry.manager import LiveSessionConflict
 from app.telemetry.parse import LiveReadError, parse_supported_pids
 from app.telemetry.pids import CURATED_PIDS
@@ -35,7 +36,7 @@ async def supported_pids(vehicle_id: int, request: Request) -> dict:
 async def live(vehicle_id: int, pids: str, request: Request):
     manager = getattr(request.app.state, "telemetry_manager", None)
     host = getattr(request.app.state, "obd_host", None)
-    pid_list = [p.strip() for p in pids.split(",") if p.strip()]
+    pid_list = [p.strip() for p in pids.split(",") if p.strip()][: settings.live_max_pids]
 
     if manager is None or host is None or not host.available:
         async def err():
@@ -44,16 +45,17 @@ async def live(vehicle_id: int, pids: str, request: Request):
 
         return StreamingResponse(err(), media_type="text/event-stream")
 
-    try:
-        session_id, sub, mismatch = await manager.subscribe(vehicle_id, pid_list)
-    except LiveSessionConflict as exc:
+    # Fast 409 for the common conflict (a session already active for another vehicle).
+    if manager.active_vehicle_id is not None and manager.active_vehicle_id != vehicle_id:
         raise HTTPException(
             status_code=409,
-            detail=f"A live session is already active for vehicle {exc.active_vehicle_id}.",
+            detail=f"A live session is already active for vehicle {manager.active_vehicle_id}.",
         )
 
     async def stream():
+        sub = None
         try:
+            session_id, sub, mismatch = await manager.subscribe(vehicle_id, pid_list)
             yield _sse({"type": "session", "session_id": session_id, "target_hz": manager.target_hz})
             if mismatch:
                 yield _sse({"type": "vin_mismatch", "detail": mismatch})
@@ -67,8 +69,15 @@ async def live(vehicle_id: int, pids: str, request: Request):
                 yield _sse(event)
                 if event["type"] in ("disconnected", "error"):
                     break
+        except LiveSessionConflict as exc:
+            # Rare TOCTOU: another vehicle's session started between the pre-check and subscribe.
+            yield _sse({
+                "type": "error",
+                "detail": f"A live session is already active for vehicle {exc.active_vehicle_id}.",
+            })
         finally:
-            await manager.unsubscribe(sub)
+            if sub is not None:
+                await manager.unsubscribe(sub)
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 
