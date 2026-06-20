@@ -1,6 +1,7 @@
 import type {
-  AppConfig, ChatMessage, Document, Job, JobCreate, LiveSessionDetail, LiveSessionSummary,
-  ScannerStatus, SupportedPids, Vehicle, VehicleCreate,
+  AppConfig, ChatMessage, DiagnosticReportSummary, DiagnosticSessionDetail, Document, Job,
+  JobCreate, LiveSessionDetail, LiveSessionSummary, ScannerStatus, SupportedPids, Vehicle,
+  VehicleCreate,
 } from '@/api/types'
 
 export class ApiError extends Error {
@@ -62,4 +63,9 @@ export const api = {
     request<LiveSessionSummary[]>(`/api/vehicles/${vehicleId}/sessions`),
   getLiveSession: (sessionId: number) =>
     request<LiveSessionDetail>(`/api/sessions/${sessionId}`),
+
+  listDiagnosticReports: (vehicleId: number) =>
+    request<DiagnosticReportSummary[]>(`/api/vehicles/${vehicleId}/diagnostic-reports`),
+  getDiagnosticSession: (sessionId: number) =>
+    request<DiagnosticSessionDetail>(`/api/diagnostic-sessions/${sessionId}`),
 }

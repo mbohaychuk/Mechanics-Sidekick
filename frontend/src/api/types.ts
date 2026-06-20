@@ -116,3 +116,41 @@ export interface LiveSessionDetail {
   session: { id: number; vehicle_id: number; status: string; pids: string[]; sample_count: number }
   samples: { seq: number; t: number; values: Record<string, LiveValue | null> }[]
 }
+
+export interface DiagnosticFinding {
+  system: string
+  severity: 'good' | 'warn' | 'fail'
+  observation: string
+  interpretation: string
+  recommendation: string
+  evidence: Record<string, unknown>
+}
+
+export interface DiagnosticReport {
+  overall_status: 'good' | 'fair' | 'poor'
+  summary: string
+  findings: DiagnosticFinding[]
+}
+
+export interface DiagnosticReportSummary {
+  id: number
+  status: string
+  protocol_name: string
+  started_utc: string
+  ended_utc: string | null
+  overall_status: 'good' | 'fair' | 'poor' | null
+  summary: string | null
+}
+
+export interface DiagnosticSessionDetail {
+  session: {
+    id: number
+    vehicle_id: number
+    status: string
+    protocol_name: string
+    overall_status: string | null
+    started_utc: string
+    ended_utc: string | null
+  }
+  report: DiagnosticReport | null
+}
