@@ -46,6 +46,7 @@ function open(id: number) {
         <input
           v-model.number="form.year"
           type="number"
+          aria-label="Year"
           placeholder="Year"
           min="1900"
           :max="new Date().getFullYear() + 1"
@@ -53,18 +54,21 @@ function open(id: number) {
         />
         <input
           v-model="form.make"
+          aria-label="Make"
           placeholder="Make"
           required
           class="col-span-1 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
         />
         <input
           v-model="form.model"
+          aria-label="Model"
           placeholder="Model"
           required
           class="col-span-1 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
         />
         <input
           v-model="form.engine"
+          aria-label="Engine"
           placeholder="Engine"
           class="col-span-1 rounded-md border border-border bg-surface-2 px-3 py-2 font-mono text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
         />

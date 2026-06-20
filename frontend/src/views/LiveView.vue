@@ -214,13 +214,13 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
           </span>
 
           <!-- PID name -->
-          <span class="w-36 shrink-0 font-mono text-xs font-medium tracking-wider text-text/90">
+          <span class="w-24 shrink-0 truncate font-mono text-xs font-medium tracking-wider text-text/90 sm:w-36">
             {{ name }}
           </span>
 
           <!-- Live value -->
           <span
-            class="w-24 shrink-0 text-right font-mono text-sm tabular-nums transition-colors duration-200"
+            class="w-20 shrink-0 text-right font-mono text-sm tabular-nums transition-colors duration-200 sm:w-24"
             :class="fmt(name) === '—' ? 'text-muted/30' : 'text-accent'"
           >
             {{ fmt(name) }}
@@ -238,6 +238,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
               ? 'bg-accent/15 text-accent'
               : 'text-muted/30 hover:text-muted/60'"
             :title="pinned.includes(name) ? 'Unpin from focus chart' : 'Pin to focus chart'"
+            :aria-label="(pinned.includes(name) ? 'Unpin ' : 'Pin ') + name"
             @click="togglePin(name)"
           >
             pin
@@ -247,6 +248,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
           <button
             class="shrink-0 rounded px-1.5 py-0.5 font-mono text-[0.6rem] text-muted/20 opacity-0 transition-opacity duration-100 group-hover:opacity-100 hover:text-danger"
             title="Remove channel"
+            :aria-label="'Remove ' + name"
             @click="removePid(name)"
           >
             ✕
@@ -268,6 +270,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
       </div>
       <div class="mt-2 flex items-center gap-3">
         <select
+          aria-label="Add a PID channel"
           class="flex-1 rounded-md border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-text outline-none transition-colors duration-150 focus:border-accent/50 focus:ring-1 focus:ring-accent/20 disabled:opacity-40"
           :disabled="addable.length === 0"
           @change="addPid(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
