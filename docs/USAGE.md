@@ -2,20 +2,24 @@
 
 ## What this is
 
-A local CLI RAG assistant for vehicle service manuals. You load PDFs against a
+The CLI for Mechanics-Sidekick. The web app (see the [README](../README.md)) is the
+primary interface; the CLI shares the same SQLite database. You load PDFs against a
 vehicle, open a job, and ask questions — every answer is grounded in your own
-documents with page citations. **Fully local: no cloud, no API keys.** Nothing
-leaves your machine; the LLM and embeddings run via Ollama on localhost.
+documents with page citations.
+
+**Privacy:** by default the app uses **OpenAI** for chat and embeddings, so questions
+and retrieved manual excerpts are sent to the cloud (the README has the full privacy
+note). For a **fully-local** setup, set `EMBED_PROVIDER=ollama` and `LLM_PROVIDER=ollama`
+in `.env` — then the LLM and embeddings run via Ollama on localhost and nothing leaves
+your machine.
 
 ## Prerequisites
 
 - `uv` (Python package manager) — Python 3.11+
-- Ollama reachable at `http://localhost:11434`. Either:
-  - The shared `ollama-portfolio` Docker container (host port 11434), or
-  - Native `ollama serve`
-- Models pulled into that Ollama instance:
-  - `llama3.2:3b` (chat + per-chunk context summaries)
-  - `nomic-embed-text` (embeddings)
+- **Default (OpenAI):** an `OPENAI_API_KEY` set in `.env`.
+- **Local option (instead of OpenAI):** Ollama reachable at `http://localhost:11434`
+  with `llama3.2:3b` (chat + per-chunk context summaries) and `nomic-embed-text`
+  (embeddings) pulled, plus `EMBED_PROVIDER=ollama` / `LLM_PROVIDER=ollama` in `.env`.
 - Linux/macOS shell. Tested on Ubuntu.
 
 ## First-time setup
@@ -24,24 +28,22 @@ From the repo root (`~/repos/Mechanics-Sidekick`):
 
 ```bash
 uv sync --group dev                       # installs runtime + test deps
-docker start ollama-portfolio             # if using the shared container
-curl -s http://localhost:11434/api/tags   # confirm Ollama is up + models present
+cp .env.example .env                      # then set OPENAI_API_KEY (or switch providers to ollama)
 ```
 
-If the models aren't already pulled:
+For the local Ollama option, start Ollama and pull the models:
 
 ```bash
-docker exec ollama-portfolio ollama pull llama3.2:3b
-docker exec ollama-portfolio ollama pull nomic-embed-text
+ollama serve                              # or: docker start ollama-portfolio
+ollama pull llama3.2:3b
+ollama pull nomic-embed-text
+curl -s http://localhost:11434/api/tags   # confirm Ollama is up + models present
 ```
-
-Defaults (in `app/config.py` and `.env`) point at these models on
-`http://localhost:11434`. No further config needed.
 
 Verify the install:
 
 ```bash
-uv run pytest tests/ -v          # 63 tests, all offline (Ollama is mocked)
+uv run pytest tests/ -v          # full suite, all offline (OpenAI, Ollama, and MCP are mocked)
 uv run mechanic-sidekick --help
 ```
 
@@ -103,9 +105,6 @@ a cited answer in under two minutes with five source rows (filename + page).
   slow once you cross thousands of chunks per vehicle.
 - All retrieval is **vehicle-scoped, not job-scoped** — every job on the same
   vehicle sees every document on that vehicle.
-- The project's `CLAUDE.md` lists stale model names (`gpt-oss:20b`,
-  `qwen3-embedding:4b`). The README, `app/config.py`, and `.env` are the
-  source of truth: `llama3.2:3b` + `nomic-embed-text`.
 
 ## Stop / cleanup
 

@@ -15,7 +15,11 @@ const label = computed(() => scanner.status?.detail ?? 'Scanner not connected.')
 </script>
 
 <template>
-  <div class="flex items-center gap-2 rounded-full border border-border bg-surface-2 px-3 py-1.5">
+  <div
+    class="flex items-center gap-2 rounded-full border border-border bg-surface-2 px-2 py-1.5 sm:px-3"
+    role="status"
+    :aria-label="label"
+  >
     <!-- Pulsing status dot -->
     <span class="relative flex h-2 w-2 shrink-0">
       <span
@@ -27,7 +31,7 @@ const label = computed(() => scanner.status?.detail ?? 'Scanner not connected.')
         :class="tone"
       />
     </span>
-    <!-- Status label -->
-    <span class="font-mono text-xs tracking-wide text-muted">{{ label }}</span>
+    <!-- Status label — hidden on narrow screens (dot conveys status; aria-label covers SR) -->
+    <span class="hidden whitespace-nowrap font-mono text-xs tracking-wide text-muted sm:inline">{{ label }}</span>
   </div>
 </template>

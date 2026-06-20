@@ -1,6 +1,7 @@
 import { ref, reactive } from 'vue'
 import { streamDiagnostic, type DiagnosticStreamEvent } from '@/api/diagnosticStream'
-import type { DiagnosticReport, LiveValue } from '@/api/types'
+import { api } from '@/api/client'
+import type { DiagnosticReport, DiagnosticReportSummary, LiveValue } from '@/api/types'
 
 const WINDOW = 120
 
@@ -22,6 +23,9 @@ export function useDiagnosticSession(vehicleId: number) {
   const commentary = ref<{ text: string; t: number }[]>([])
   const anomalies = ref<{ system: string; severity: string; detail: string }[]>([])
   const report = ref<DiagnosticReport | null>(null)
+  const pastReports = ref<DiagnosticReportSummary[]>([])
+  const viewedReport = ref<DiagnosticReport | null>(null)
+  const pastError = ref('')
   const latest = reactive<Record<string, LiveValue | null>>({})
   const series = reactive<Record<string, [number, number][]>>({})
 
@@ -60,6 +64,7 @@ export function useDiagnosticSession(vehicleId: number) {
       report.value = { overall_status: event.overall_status, summary: event.summary, findings: event.findings }
     } else if (event.type === 'done') {
       if (status.value !== 'error') status.value = 'complete'
+      void loadPastReports()
     } else if (event.type === 'error') {
       status.value = 'error'
       detail.value = event.detail
@@ -74,6 +79,7 @@ export function useDiagnosticSession(vehicleId: number) {
     commentary.value = []
     anomalies.value = []
     report.value = null
+    viewedReport.value = null
     currentIndex.value = -1
     for (const k of Object.keys(latest)) delete latest[k]
     for (const k of Object.keys(series)) delete series[k]
@@ -95,5 +101,26 @@ export function useDiagnosticSession(vehicleId: number) {
     if (current !== 'error' && current !== 'complete') status.value = 'idle'
   }
 
-  return { status, detail, steps, currentIndex, commentary, anomalies, report, latest, series, start, stop }
+  async function loadPastReports() {
+    pastError.value = ''
+    try {
+      pastReports.value = await api.listDiagnosticReports(vehicleId)
+    } catch (err) {
+      pastError.value = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  async function viewReport(sessionId: number) {
+    pastError.value = ''
+    try {
+      viewedReport.value = (await api.getDiagnosticSession(sessionId)).report
+    } catch (err) {
+      pastError.value = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  return {
+    status, detail, steps, currentIndex, commentary, anomalies, report, latest, series,
+    pastReports, viewedReport, pastError, start, stop, loadPastReports, viewReport,
+  }
 }

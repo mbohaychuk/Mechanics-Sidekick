@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDiagnosticSession } from '@/composables/useDiagnosticSession'
 import LiveFocusChart from '@/components/LiveFocusChart.vue'
@@ -11,9 +11,18 @@ const route = useRoute()
 const vehicleId = Number(route.params.id)
 const d = useDiagnosticSession(vehicleId)
 
+onMounted(() => d.loadPastReports())
 onUnmounted(() => d.stop())
 
 const running = computed(() => d.status.value === 'running' || d.status.value === 'connecting')
+
+function fmtDate(iso: string): string {
+  const dt = new Date(iso)
+  return Number.isNaN(dt.getTime()) ? iso : dt.toLocaleString()
+}
+function statusClass(s: 'good' | 'fair' | 'poor' | null): string {
+  return s ? { good: 'text-success', fair: 'text-warning', poor: 'text-danger' }[s] : ''
+}
 const vitalNames = computed(() => Object.keys(d.latest))
 const focusSeries = computed(() =>
   vitalNames.value.slice(0, 4).map((name) => ({ name, points: d.series[name] ?? [] })),
@@ -85,7 +94,7 @@ function toggle() {
           <p v-if="d.steps.value.length === 0" class="px-4 py-6 text-center font-mono text-xs text-muted/30">No active protocol.</p>
         </div>
 
-        <div v-if="d.anomalies.value.length" class="overflow-hidden rounded-card border border-border bg-surface">
+        <div v-if="d.anomalies.value.length" role="log" aria-live="polite" class="overflow-hidden rounded-card border border-border bg-surface">
           <div class="border-b border-border/50 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">Live flags</div>
           <div
             v-for="(a, i) in d.anomalies.value" :key="i"
@@ -99,7 +108,7 @@ function toggle() {
           </div>
         </div>
 
-        <div v-if="d.commentary.value.length" class="overflow-hidden rounded-card border border-border bg-surface">
+        <div v-if="d.commentary.value.length" role="log" aria-live="polite" class="overflow-hidden rounded-card border border-border bg-surface">
           <div class="border-b border-border/50 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">Live commentary</div>
           <CommentaryItem v-for="(c, i) in d.commentary.value" :key="i" :text="c.text" />
         </div>
@@ -107,5 +116,35 @@ function toggle() {
         <HealthReport v-if="d.report.value" :report="d.report.value" />
       </section>
     </div>
+
+    <section class="mt-8 space-y-3">
+      <h2 class="font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">Past reports</h2>
+      <p v-if="d.pastError.value" class="rounded-md border border-danger/30 bg-danger/8 px-3 py-2 font-mono text-xs text-danger">
+        Couldn't load past reports: {{ d.pastError.value }}
+      </p>
+      <ul v-if="d.pastReports.value.length" class="overflow-hidden rounded-card border border-border bg-surface">
+        <li v-for="r in d.pastReports.value" :key="r.id">
+          <button
+            :data-test="`past-report-${r.id}`"
+            class="flex w-full items-center justify-between gap-3 border-b border-border/50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            @click="d.viewReport(r.id)"
+          >
+            <span class="min-w-0 truncate">
+              <span class="font-mono text-xs text-text/90">{{ fmtDate(r.started_utc) }}</span>
+              <span class="ml-2 text-xs text-muted">{{ r.summary ?? '—' }}</span>
+            </span>
+            <span
+              v-if="r.overall_status"
+              class="shrink-0 font-mono text-[0.6rem] uppercase tracking-widest"
+              :class="statusClass(r.overall_status)"
+            >{{ r.overall_status }}</span>
+          </button>
+        </li>
+      </ul>
+      <p v-else-if="!d.pastError.value" class="rounded-card border border-border bg-surface px-4 py-6 text-center font-mono text-xs text-muted/30">
+        No past reports yet — run a health check to generate one.
+      </p>
+      <HealthReport v-if="d.viewedReport.value" :report="d.viewedReport.value" />
+    </section>
   </main>
 </template>

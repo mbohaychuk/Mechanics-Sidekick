@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
 import { streamChatMessage, type ChatStreamEvent } from '@/api/chatStream'
@@ -20,6 +20,8 @@ const draft = ref('')
 const streaming = ref(false)
 const activeTools = ref<{ name: string; done: boolean }[]>([])
 const scrollAnchor = ref<HTMLElement | null>(null)
+const loadError = ref('')
+let controller: AbortController | null = null
 
 function scrollBottom() {
   nextTick(() => {
@@ -30,10 +32,16 @@ function scrollBottom() {
 }
 
 onMounted(async () => {
-  const history: ChatMessage[] = await api.listMessages(jobId)
-  turns.value = history.map((m) => ({ role: m.role, content: m.content, sources: m.sources_json }))
-  scrollBottom()
+  try {
+    const history: ChatMessage[] = await api.listMessages(jobId)
+    turns.value = history.map((m) => ({ role: m.role, content: m.content, sources: m.sources_json }))
+    scrollBottom()
+  } catch (err) {
+    loadError.value = err instanceof Error ? err.message : String(err)
+  }
 })
+
+onUnmounted(() => controller?.abort())
 
 watch(() => turns.value.length, scrollBottom)
 
@@ -47,6 +55,7 @@ async function send() {
   streaming.value = true
   activeTools.value = []
   scrollBottom()
+  controller = new AbortController()
 
   try {
     await streamChatMessage(jobId, content, (e: ChatStreamEvent) => {
@@ -63,9 +72,11 @@ async function send() {
       } else if (e.type === 'error') {
         assistant.content += `\n[error] ${e.detail}`
       }
-    })
+    }, controller.signal)
   } catch (err) {
-    assistant.content += `\n[connection error] ${(err as Error).message}`
+    if ((err as Error).name !== 'AbortError') {
+      assistant.content += `\n[connection error] ${(err as Error).message}`
+    }
   } finally {
     streaming.value = false
   }
@@ -78,6 +89,10 @@ async function send() {
     <!-- Transcript -->
     <div class="flex-1 overflow-y-auto px-4 py-6 scroll-smooth" aria-live="polite" aria-label="Chat transcript">
       <div class="mx-auto max-w-2xl">
+
+        <p v-if="loadError" class="mb-4 rounded-md border border-danger/30 bg-danger/8 px-3 py-2 font-mono text-xs text-danger">
+          Couldn't load chat history: {{ loadError }}
+        </p>
 
         <!-- Empty state -->
         <div v-if="turns.length === 0" class="flex flex-col items-center justify-center py-20 text-center">

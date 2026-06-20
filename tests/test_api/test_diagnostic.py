@@ -29,7 +29,7 @@ class _FakeHost:
 
 class _FakeProvider:
     """Stands in for OpenAIProvider so the endpoint needs no API key. Returns valid JSON."""
-    def stream_turn(self, messages, tools, max_tokens=None):
+    def stream_turn(self, messages, tools, max_tokens=None, response_format=None):
         from app.agent.provider import ProviderTurn
         is_report = any("health report" in m.get("content", "") for m in messages)
         raw = (json.dumps({"summary": "ok", "findings": {}}) if is_report

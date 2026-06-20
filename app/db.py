@@ -1,6 +1,18 @@
 # app/db.py
-from sqlalchemy import create_engine, Engine
+import sqlite3
+
+from sqlalchemy import create_engine, event, Engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record) -> None:
+    # SQLite defaults foreign-key enforcement OFF; enable it per connection so declared
+    # ForeignKey constraints (and any future ON DELETE rules) are actually enforced.
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 class Base(DeclarativeBase):

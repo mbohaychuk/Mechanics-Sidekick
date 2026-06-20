@@ -61,6 +61,7 @@ onMounted(load)
     <form class="mb-4 flex gap-2" @submit.prevent="add">
       <input
         v-model="title"
+        aria-label="Describe the issue"
         placeholder="Describe the issue (e.g. Oil leak)"
         class="flex-1 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-muted/60 transition-colors duration-150 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/40"
       />

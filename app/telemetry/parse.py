@@ -32,7 +32,8 @@ def parse_live_data(text: str) -> dict[str, dict | None]:
         name = entry.get("name")
         if not name:
             continue
-        out[name] = None if "error" in entry else {"value": entry.get("value"), "unit": entry.get("unit")}
+        # obd-mcp rows always carry an "error" key (null on success), so test the VALUE, not presence.
+        out[name] = None if entry.get("error") else {"value": entry.get("value"), "unit": entry.get("unit")}
     return out
 
 

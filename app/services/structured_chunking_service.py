@@ -144,10 +144,15 @@ class StructuredChunkingService:
             while start < total:
                 end = min(start + self._chunk_size, total)
                 window = words_with_pages[start:end]
+                # Cite the page contributing the most words to this chunk (tie -> earliest),
+                # not the first word's page — otherwise a chunk that spans a page boundary
+                # points at where it starts rather than where its content actually lives.
+                page_counts = Counter(p for _, p in window)
+                page_number = min(page_counts, key=lambda p: (-page_counts[p], p))
                 chunks.append(
                     {
                         "chunk_index": chunk_index,
-                        "page_number": window[0][1],
+                        "page_number": page_number,
                         "section_title": section["title"],
                         "content": " ".join(w for w, _ in window),
                     }

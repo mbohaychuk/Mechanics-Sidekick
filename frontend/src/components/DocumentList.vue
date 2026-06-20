@@ -61,6 +61,7 @@ const statusConfig: Record<string, { label: string; cls: string; dot: string }> 
   ready:   { label: 'READY',   cls: 'text-success border-success/30 bg-success/10',   dot: 'bg-success' },
   failed:  { label: 'FAILED',  cls: 'text-danger border-danger/30 bg-danger/10',      dot: 'bg-danger' },
   pending: { label: 'INDEXING', cls: 'text-warning border-warning/30 bg-warning/10',  dot: 'bg-warning animate-pulse' },
+  no_text: { label: 'NO TEXT', cls: 'text-danger border-danger/30 bg-danger/10',      dot: 'bg-danger' },
 }
 
 function docTypeLabel(t: string) {

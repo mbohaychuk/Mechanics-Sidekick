@@ -73,6 +73,12 @@ def get_report(session_id: int, session: Session = Depends(get_session)) -> dict
     row = DiagnosticSessionRepository(session).get_by_id(session_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Diagnostic session {session_id} not found")
+    report = None
+    if row.report_json:
+        try:
+            report = json.loads(row.report_json)
+        except (ValueError, TypeError):
+            report = None  # one corrupt row must not 500 the endpoint
     return {
         "session": {
             "id": row.id, "vehicle_id": row.vehicle_id, "status": row.status,
@@ -80,5 +86,5 @@ def get_report(session_id: int, session: Session = Depends(get_session)) -> dict
             "started_utc": row.started_utc.isoformat(),
             "ended_utc": row.ended_utc.isoformat() if row.ended_utc else None,
         },
-        "report": json.loads(row.report_json) if row.report_json else None,
+        "report": report,
     }

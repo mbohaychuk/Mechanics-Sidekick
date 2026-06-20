@@ -23,7 +23,8 @@ class ProviderTurn:
 
 class ChatProvider(Protocol):
     def stream_turn(
-        self, messages: list[dict], tools: list[dict], max_tokens: int | None = None
+        self, messages: list[dict], tools: list[dict], max_tokens: int | None = None,
+        response_format: dict | None = None,
     ) -> Iterator[dict]:
         """Yield {"type": "token", "text": str} events during content, then
         exactly one terminal {"type": "turn", "turn": ProviderTurn}."""
@@ -32,11 +33,12 @@ class ChatProvider(Protocol):
 
 class OpenAIProvider:
     def __init__(self, api_key: str | None, model: str, client: OpenAI | None = None) -> None:
-        self._client = client or OpenAI(api_key=api_key)
+        self._client = client or OpenAI(api_key=api_key, timeout=120.0, max_retries=2)
         self._model = model
 
     def stream_turn(
-        self, messages: list[dict], tools: list[dict], max_tokens: int | None = None
+        self, messages: list[dict], tools: list[dict], max_tokens: int | None = None,
+        response_format: dict | None = None,
     ) -> Iterator[dict]:
         kwargs = dict(
             model=self._model,
@@ -47,6 +49,8 @@ class OpenAIProvider:
         )
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
+        if response_format is not None:
+            kwargs["response_format"] = response_format
         stream = self._client.chat.completions.create(**kwargs)
         text_parts: list[str] = []
         acc: dict[int, dict] = {}

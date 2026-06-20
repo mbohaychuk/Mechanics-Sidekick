@@ -16,7 +16,13 @@ vi.mock('@/api/diagnosticStream', () => ({
   }),
 }))
 
+vi.mock('@/api/client', () => ({
+  api: { listDiagnosticReports: vi.fn(), getDiagnosticSession: vi.fn() },
+  ApiError: class ApiError extends Error {},
+}))
+
 import DiagnosticSessionView from '@/views/DiagnosticSessionView.vue'
+import { api } from '@/api/client'
 
 function mountAt(id: string) {
   const router = createRouter({ history: createMemoryHistory(), routes: [
@@ -27,7 +33,12 @@ function mountAt(id: string) {
   return router.isReady().then(() => mount(DiagnosticSessionView, { global: { plugins: [router] } }))
 }
 
-beforeEach(() => { setActivePinia(createPinia()); handlers.current = null })
+beforeEach(() => {
+  setActivePinia(createPinia())
+  handlers.current = null
+  ;(api.listDiagnosticReports as ReturnType<typeof vi.fn>).mockResolvedValue([])
+  ;(api.getDiagnosticSession as ReturnType<typeof vi.fn>).mockReset()
+})
 
 describe('DiagnosticSessionView', () => {
   it('starts a session and renders steps, commentary, vitals, and the report', async () => {
@@ -55,5 +66,48 @@ describe('DiagnosticSessionView', () => {
     handlers.current!({ type: 'done' })
     await flushPromises()
     expect(wrapper.text()).toContain('All clear.')
+  })
+
+  it('loads past diagnostic reports on mount and opens one on click', async () => {
+    (api.listDiagnosticReports as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 7, status: 'complete', protocol_name: 'default', started_utc: '2026-06-01T10:00:00',
+        ended_utc: '2026-06-01T10:05:00', overall_status: 'fair', summary: 'Minor fuel trim drift.' },
+    ]);
+    (api.getDiagnosticSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+      session: { id: 7, vehicle_id: 1, status: 'complete', protocol_name: 'default',
+        overall_status: 'fair', started_utc: '2026-06-01T10:00:00', ended_utc: '2026-06-01T10:05:00' },
+      report: { overall_status: 'fair', summary: 'Minor fuel trim drift detected on bank 1.', findings: [] },
+    })
+
+    const wrapper = await mountAt('1')
+    await flushPromises()
+
+    expect(api.listDiagnosticReports).toHaveBeenCalledWith(1)
+    expect(wrapper.text()).toContain('Minor fuel trim drift.')
+
+    await wrapper.find('[data-test="past-report-7"]').trigger('click')
+    await flushPromises()
+
+    expect(api.getDiagnosticSession).toHaveBeenCalledWith(7)
+    expect(wrapper.text()).toContain('Minor fuel trim drift detected on bank 1.')
+  })
+
+  it('refreshes the past-reports list when a live run completes', async () => {
+    (api.listDiagnosticReports as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([]) // on mount: none yet
+      .mockResolvedValueOnce([
+        { id: 9, status: 'complete', protocol_name: 'default', started_utc: '2026-06-20T09:00:00',
+          ended_utc: '2026-06-20T09:05:00', overall_status: 'good', summary: 'Freshly generated report.' },
+      ]) // after the run completes
+
+    const wrapper = await mountAt('1')
+    await wrapper.find('[data-test="start"]').trigger('click')
+    await flushPromises()
+
+    handlers.current!({ type: 'report', overall_status: 'good', summary: 'Live.', findings: [] })
+    handlers.current!({ type: 'done' })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Freshly generated report.')
   })
 })

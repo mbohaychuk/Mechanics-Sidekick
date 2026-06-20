@@ -31,7 +31,7 @@ def _seed(db_session):
     db_session.flush()
 
 
-def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_client=None):
+def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_client=None, vehicle_repo=None):
     retrieval = MagicMock()
     retrieval.retrieve.return_value = [
         (SimpleNamespace(document_id=1, page_number=10, content="Torque 40 Nm."), 0.9)
@@ -41,7 +41,7 @@ def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_c
     return AgentOrchestrator(
         chat_repo=ChatRepository(db_session),
         job_repo=JobRepository(db_session),
-        vehicle_repo=VehicleRepository(db_session),
+        vehicle_repo=vehicle_repo or VehicleRepository(db_session),
         doc_repo=doc_repo,
         retrieval=retrieval,
         provider=provider,
@@ -115,19 +115,80 @@ def test_iteration_cap(db_session):
 
 
 def test_missing_vehicle(db_session):
-    db_session.add(Job(vehicle_id=999, title="x"))
-    db_session.flush()
-    job_id = db_session.query(Job).filter_by(vehicle_id=999).first().id
+    # FK enforcement guarantees a job's vehicle row exists, so the orchestrator's defensive
+    # "vehicle is None" branch is reachable only via an inconsistent lookup — simulate that
+    # with a vehicle_repo that reports the (seeded, FK-valid) vehicle missing.
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
 
+    vehicle_repo = MagicMock()
+    vehicle_repo.get_by_id.return_value = None
     provider = FakeProvider([ProviderTurn(text="hi", tool_calls=[])])
-    orch = _orchestrator(db_session, provider)
+    orch = _orchestrator(db_session, provider, vehicle_repo=vehicle_repo)
 
     events = list(orch.run(job_id=job_id, user_message="query"))
     assert events[0]["type"] == "error"
-    assert "Vehicle 999" in events[0]["detail"]
+    assert "Vehicle 1" in events[0]["detail"]
 
     history = ChatRepository(db_session).list_by_job(job_id)
     assert history == []
+
+
+def test_tool_failure_degrades_and_loop_continues(db_session):
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
+    provider = FakeProvider([
+        ProviderTurn(text="", tool_calls=[ToolCall(id="c1", name="search_manuals", arguments={"query": "x"})]),
+        ProviderTurn(text="Here is my answer.", tool_calls=[]),
+    ])
+    orch = _orchestrator(db_session, provider)
+    orch._retrieval.retrieve.side_effect = RuntimeError("boom")  # the tool blows up
+
+    events = list(orch.run(job_id=job_id, user_message="q"))
+
+    assert "tool_result" in [e["type"] for e in events]   # tool ran and soft-failed
+    assert events[-1]["type"] == "done"                    # the turn still completed
+    history = ChatRepository(db_session).list_by_job(job_id)
+    assert any(m.role == "assistant" and "answer" in m.content.lower() for m in history)
+
+
+def test_multiple_tool_calls_in_one_turn(db_session):
+    # A single turn returning >1 tool_call must execute each and pair tool results by id.
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
+    provider = FakeProvider([
+        ProviderTurn(text="", tool_calls=[
+            ToolCall(id="a", name="search_manuals", arguments={"query": "brakes"}),
+            ToolCall(id="b", name="search_manuals", arguments={"query": "oil"}),
+        ]),
+        ProviderTurn(text="Done.", tool_calls=[]),
+    ])
+    orch = _orchestrator(db_session, provider)
+
+    events = list(orch.run(job_id=job_id, user_message="q"))
+
+    assert len([e for e in events if e["type"] == "tool_result"]) == 2  # both executed
+    assert events[-1]["type"] == "done"
+
+
+class _ExplodingProvider:
+    def stream_turn(self, messages, tools):
+        raise RuntimeError("network down")
+        yield  # unreachable — marks this as a generator
+
+
+def test_provider_failure_persists_assistant_turn(db_session):
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
+    orch = _orchestrator(db_session, _ExplodingProvider())
+
+    events = list(orch.run(job_id=job_id, user_message="q"))
+
+    assert any(e["type"] == "error" and "provider_error" in e["detail"] for e in events)
+    error_text = " ".join(e.get("detail", "") for e in events if e["type"] == "error")
+    assert "network down" not in error_text  # raw exception text must NOT leak to the client
+    roles = [m.role for m in ChatRepository(db_session).list_by_job(job_id)]
+    assert roles == ["user", "assistant"]  # no silent half-written conversation
 
 
 class CapturingProvider:

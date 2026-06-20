@@ -62,7 +62,8 @@ class CommentaryGenerator:
         text_parts: list[str] = []
         turn = None
         for ev in self._provider.stream_turn(
-            messages, [], max_tokens=self._settings.diag_commentary_max_tokens
+            messages, [], max_tokens=self._settings.diag_commentary_max_tokens,
+            response_format={"type": "json_object"},  # same JSON-mode guarantee as the report builder
         ):
             if ev["type"] == "token":
                 text_parts.append(ev["text"])

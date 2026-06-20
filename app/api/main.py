@@ -3,9 +3,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import app.models  # noqa: F401 — register models with Base before create_all
 from app.agent.mcp_host import build_obd_host
@@ -15,6 +17,22 @@ from app.db import Base, get_engine, get_session_factory
 from app.telemetry.manager import TelemetryManager
 
 logger = logging.getLogger(__name__)
+
+
+class SpaStaticFiles(StaticFiles):
+    """StaticFiles that serves index.html for unmatched non-API paths, so that
+    history-mode SPA deep links and hard refreshes (e.g. /vehicles/3/diagnostic)
+    load the app instead of returning a 404. Unknown /api paths still 404."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            # `path` has the mount prefix + leading slash stripped (e.g. "api/x", "vehicles/3").
+            is_api = path == "api" or path.startswith("api/")
+            if exc.status_code == 404 and not is_api:
+                return await super().get_response("index.html", scope)
+            raise
 
 
 def configure_db(app: FastAPI, db_url: str) -> None:
@@ -61,6 +79,12 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+        # Centralized logging for unhandled errors on non-streaming routes; never leak the trace.
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -76,6 +100,6 @@ def create_app() -> FastAPI:
 
     spa_dir = Path(settings.spa_dist_dir)
     if spa_dir.is_dir():
-        app.mount("/", StaticFiles(directory=str(spa_dir), html=True), name="spa")
+        app.mount("/", SpaStaticFiles(directory=str(spa_dir), html=True), name="spa")
 
     return app
