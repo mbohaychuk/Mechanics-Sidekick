@@ -31,7 +31,7 @@ def _seed(db_session):
     db_session.flush()
 
 
-def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_client=None):
+def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_client=None, vehicle_repo=None):
     retrieval = MagicMock()
     retrieval.retrieve.return_value = [
         (SimpleNamespace(document_id=1, page_number=10, content="Torque 40 Nm."), 0.9)
@@ -41,7 +41,7 @@ def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_c
     return AgentOrchestrator(
         chat_repo=ChatRepository(db_session),
         job_repo=JobRepository(db_session),
-        vehicle_repo=VehicleRepository(db_session),
+        vehicle_repo=vehicle_repo or VehicleRepository(db_session),
         doc_repo=doc_repo,
         retrieval=retrieval,
         provider=provider,
@@ -115,16 +115,20 @@ def test_iteration_cap(db_session):
 
 
 def test_missing_vehicle(db_session):
-    db_session.add(Job(vehicle_id=999, title="x"))
-    db_session.flush()
-    job_id = db_session.query(Job).filter_by(vehicle_id=999).first().id
+    # FK enforcement guarantees a job's vehicle row exists, so the orchestrator's defensive
+    # "vehicle is None" branch is reachable only via an inconsistent lookup — simulate that
+    # with a vehicle_repo that reports the (seeded, FK-valid) vehicle missing.
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
 
+    vehicle_repo = MagicMock()
+    vehicle_repo.get_by_id.return_value = None
     provider = FakeProvider([ProviderTurn(text="hi", tool_calls=[])])
-    orch = _orchestrator(db_session, provider)
+    orch = _orchestrator(db_session, provider, vehicle_repo=vehicle_repo)
 
     events = list(orch.run(job_id=job_id, user_message="query"))
     assert events[0]["type"] == "error"
-    assert "Vehicle 999" in events[0]["detail"]
+    assert "Vehicle 1" in events[0]["detail"]
 
     history = ChatRepository(db_session).list_by_job(job_id)
     assert history == []
