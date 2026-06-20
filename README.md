@@ -1,8 +1,8 @@
 # Mechanics Sidekick
 
-A diagnostic copilot for mechanics. Add a vehicle, upload its service manuals, open a job, and chat with an **agent** that grounds its answers in your manuals, reads the live car over OBD‑II, and searches the web — in a browser, with the answer streaming back as it's written.
+A diagnostic copilot for mechanics. Add a vehicle, upload its service manuals, open a job, and chat with an **agent** that grounds its answers in your manuals, reads the live car over OBD‑II, and searches the web — in a browser, with the answer streaming back as it's written. Beyond chat, it streams a **live telemetry dashboard** and runs a **guided diagnostic session** that walks you through a health test and produces a grounded vehicle health report.
 
-It started as a local CLI; it's now a web app with an agentic, tool‑using assistant. The CLI still works against the same database.
+It started as a local CLI; it's now a web app with an agentic, tool‑using assistant, a real‑time OBD dashboard, and a proactive diagnostic copilot. The CLI still works against the same database.
 
 ---
 
@@ -20,6 +20,14 @@ Workflow: **Vehicle → Documents → Job → Chat**
 
 Answers stream token‑by‑token over SSE; tool activity appears as live chips; manual citations show the source filename and page.
 
+### Live telemetry dashboard
+
+Open a vehicle's **Live** view to stream its sensor data (PIDs — RPM, coolant temp, fuel trims, O2, …) in real time: a dense vitals list with per‑row sparklines, a larger focus chart, a supported‑PID picker, and a VIN safety check. One shared async sampler reads the car **once** and fans the data out over SSE — extra tabs don't double the bus load — and every session is recorded to SQLite and replayable. Read‑only, no LLM.
+
+### Diagnostic copilot session
+
+Open a vehicle's **Diagnostic** view to run a guided health test. The copilot walks you through a protocol (idle → warm‑up → rev to ~2500 → return to idle), detecting each step from the live telemetry; it narrates the data with periodic LLM commentary, flags anomalies with deterministic rules, and at the end generates a **structured health report** — per‑system findings (severity, observation, recommendation) grounded in your manuals (and the web where they fall short), saved and reviewable. The LLM's autonomy is deliberately bounded: it interprets and may adapt a step within a fixed, validated vocabulary, but the protocol detection and anomaly rules are deterministic. The chat agent can then **reference past health reports** when you ask about the vehicle's condition or history.
+
 ---
 
 ## Architecture
@@ -27,15 +35,20 @@ Answers stream token‑by‑token over SSE; tool activity appears as live chips;
 Two processes, one experience:
 
 - **Backend — FastAPI.** Wraps the existing service/repository layer, hosts a thin provider‑portable tool‑calling loop, connects to `obd‑mcp` over stdio as a standard MCP host, runs the RAG retrieval, and streams chat over Server‑Sent Events. OpenAI for chat **and** embeddings.
-- **Frontend — Vue 3 + TypeScript SPA.** In development the Vite dev server proxies `/api` to the backend; in production the backend serves the built SPA via `StaticFiles`, so it's a single command on a single port.
+- **Frontend — Vue 3 + TypeScript SPA.** In development the Vite dev server proxies `/api` to the backend; in production the backend serves the built SPA via `StaticFiles`, so it's a single command on a single port. ECharts is code‑split into the lazy Live + Diagnostic routes, so it never weighs down the rest of the app.
+- **Live telemetry + diagnostic copilot.** Because an ELM327 is a single, serialized resource, one shared **async sampler** reads the union of subscribed PIDs over the one `obd‑mcp` connection and fans them out latest‑wins to SSE subscribers (recording each tick to SQLite, off the hot path). A stateful **diagnostic runner** subscribes to that same stream as the one active session, drives a guided protocol over it, layers on LLM commentary + deterministic anomaly rules, and produces a persisted health report — each delivered over its own SSE endpoint.
 
-`obd‑mcp` is a separate, generic MCP server; Sidekick is just one MCP host that consumes it — it stays oblivious to who calls it. If it isn't configured or a scanner isn't connected, chat degrades gracefully to manuals + web only.
+`obd‑mcp` is a separate, generic MCP server; Sidekick is just one MCP host that consumes it — it stays oblivious to who calls it. If it isn't configured or a scanner isn't connected, chat degrades gracefully to manuals + web only, and the Live / Diagnostic views show a "connect a scanner" state.
 
 ```
 Browser (Vue SPA) ──/api──▶ FastAPI ──┬─ agent loop (OpenAI tool-calling)
-                                       ├─ search_manuals  → RAG over SQLite
-                                       ├─ obd-mcp (stdio) → live OBD-II data
-                                       └─ web_search      → Tavily
+                                       │    ├─ search_manuals          → RAG over SQLite
+                                       │    ├─ obd-mcp (stdio)          → live OBD-II data
+                                       │    ├─ web_search               → Tavily
+                                       │    └─ get_diagnostic_reports   → past health reports
+                                       ├─ telemetry sampler ──SSE──▶ Live dashboard  (recorded to SQLite)
+                                       └─ diagnostic runner ──SSE──▶ Diagnostic copilot
+                                            protocol · commentary · anomaly · health report
 ```
 
 ---
@@ -171,6 +184,8 @@ The original chunk text is stored separately for citation display; the *enriched
 ---
 
 ## Roadmap → v2: phone‑only, in the garage
+
+The browser app is feature‑complete across its three designed phases — agentic chat, the live telemetry dashboard, and the diagnostic copilot. The next direction is a different shape entirely.
 
 v1 assumes a laptop in the garage. **v2 drops the laptop — you walk up to the car with just your phone.**
 
