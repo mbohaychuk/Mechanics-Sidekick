@@ -9,7 +9,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"))
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id", ondelete="CASCADE"), index=True)
     file_name: Mapped[str] = mapped_column(String(255))
     stored_path: Mapped[str] = mapped_column(String(500))
     document_type: Mapped[str] = mapped_column(String(100), default="service_manual")

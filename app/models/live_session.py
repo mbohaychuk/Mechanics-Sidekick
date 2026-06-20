@@ -10,7 +10,7 @@ class LiveSession(Base):
     __tablename__ = "live_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"))
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id", ondelete="CASCADE"), index=True)
     vin: Mapped[str | None] = mapped_column(String(32), default=None)
     started_utc: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     ended_utc: Mapped[datetime | None] = mapped_column(default=None)

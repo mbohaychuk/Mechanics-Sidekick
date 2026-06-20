@@ -9,7 +9,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"))
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="open")

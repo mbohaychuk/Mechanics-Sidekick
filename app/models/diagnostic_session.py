@@ -10,9 +10,9 @@ class DiagnosticSession(Base):
     __tablename__ = "diagnostic_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"))
+    vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id", ondelete="CASCADE"), index=True)
     live_session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("live_sessions.id"), default=None
+        ForeignKey("live_sessions.id", ondelete="SET NULL"), default=None, index=True
     )
     protocol_name: Mapped[str] = mapped_column(String(40), default="default")
     status: Mapped[str] = mapped_column(String(20), default="running")
