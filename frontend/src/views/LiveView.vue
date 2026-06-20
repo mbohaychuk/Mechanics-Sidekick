@@ -144,6 +144,11 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
             </div>
           </div>
 
+          <RouterLink
+            :to="`/vehicles/${vehicleId}/diagnostic`"
+            class="rounded-md border border-border px-3 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/70 transition-colors hover:text-accent"
+          >Health check</RouterLink>
+
           <!-- Start / Stop button -->
           <button
             class="rounded-md border px-4 py-2 font-mono text-xs font-semibold uppercase tracking-widest transition-all duration-150"
