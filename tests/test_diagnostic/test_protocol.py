@@ -1,0 +1,95 @@
+from app.diagnostic.protocol import (
+    DEFAULT_PROTOCOL,
+    DiagnosticProtocol,
+    ProtocolRunner,
+    Step,
+    StepTarget,
+    get_protocol,
+    safe_adhoc_step,
+)
+
+
+def _sample(pid, value):
+    return {pid: {"value": value, "unit": None}}
+
+
+def DiagnosticProtocol_single(step):
+    return DiagnosticProtocol(name="t", steps=[step])
+
+
+def test_default_protocol_has_expected_step_ids():
+    ids = [s.id for s in DEFAULT_PROTOCOL.steps]
+    assert ids == ["idle_baseline", "warm_up", "rev_2500", "return_idle", "steady_cruise"]
+    assert get_protocol("default") is DEFAULT_PROTOCOL
+    assert get_protocol("unknown") is DEFAULT_PROTOCOL  # falls back
+
+
+def test_target_in_range():
+    t = StepTarget(pid="RPM", low=2300, high=2700)
+    assert t.in_range(2500)
+    assert not t.in_range(2200)
+    assert not t.in_range(2800)
+
+
+def test_step_completes_only_after_dwell_holds():
+    step = Step(id="rev", label="Rev", instruction="rev", target=StepTarget("RPM", 2300, 2700),
+                min_dwell_s=2.0, timeout_s=30.0)
+    runner = ProtocolRunner(DiagnosticProtocol_single(step), max_adhoc=0)
+    # in range at t=0, still dwelling at t=1000 (< 2s) → no completion
+    assert runner.offer(_sample("RPM", 2500), seq=1, t_ms=0) is None
+    assert runner.offer(_sample("RPM", 2500), seq=2, t_ms=1000) is None
+    # at t=2000 the 2s dwell is satisfied → completes with seq_start=1, seq_end=3
+    done = runner.offer(_sample("RPM", 2500), seq=3, t_ms=2000)
+    assert done is not None and done.state == "done"
+    assert done.seq_start == 1 and done.seq_end == 3
+    assert runner.is_complete()
+
+
+def test_out_of_range_resets_dwell():
+    step = Step(id="rev", label="Rev", instruction="rev", target=StepTarget("RPM", 2300, 2700),
+                min_dwell_s=2.0, timeout_s=30.0)
+    runner = ProtocolRunner(DiagnosticProtocol_single(step), max_adhoc=0)
+    assert runner.offer(_sample("RPM", 2500), seq=1, t_ms=0) is None
+    assert runner.offer(_sample("RPM", 1000), seq=2, t_ms=1000) is None  # drops out → reset
+    assert runner.offer(_sample("RPM", 2500), seq=3, t_ms=1500) is None  # dwell restarts at 1500
+    assert runner.offer(_sample("RPM", 2500), seq=4, t_ms=3000) is None  # only 1.5s held
+    done = runner.offer(_sample("RPM", 2500), seq=5, t_ms=3500)  # 2s since 1500
+    assert done is not None and done.state == "done"
+
+
+def test_step_times_out_to_skipped():
+    step = Step(id="cruise", label="Cruise", instruction="drive", target=StepTarget("SPEED", 50, 70),
+                min_dwell_s=2.0, timeout_s=5.0)
+    runner = ProtocolRunner(DiagnosticProtocol_single(step), max_adhoc=0)
+    assert runner.offer(_sample("SPEED", 0), seq=1, t_ms=0) is None
+    done = runner.offer(_sample("SPEED", 0), seq=2, t_ms=5000)  # never in range, timeout
+    assert done is not None and done.state == "skipped"
+
+
+def test_skip_advances_current_step():
+    runner = ProtocolRunner(DEFAULT_PROTOCOL, max_adhoc=0)
+    runner.offer(_sample("RPM", 700), seq=1, t_ms=0)
+    st = runner.skip()
+    assert st is not None and st.state == "skipped" and st.index == 0
+    assert runner.current().index == 1
+
+
+def test_insert_adhoc_respects_cap():
+    runner = ProtocolRunner(DEFAULT_PROTOCOL, max_adhoc=1)
+    adhoc = Step(id="adhoc_rpm", label="Hold 2000", instruction="hold 2000",
+                 target=StepTarget("RPM", 1900, 2100), adhoc=True)
+    assert runner.insert_adhoc(adhoc) is True
+    assert runner.insert_adhoc(adhoc) is False  # cap reached
+    # inserted right after the current (index 0) step
+    assert runner._steps[1].id == "adhoc_rpm"
+
+
+def test_safe_adhoc_step_validates_vocabulary_and_bounds():
+    ok = safe_adhoc_step({"action": "insert", "step": {"pid": "RPM", "low": 1900, "high": 2100,
+                                                       "label": "Hold 2000", "instruction": "hold"}})
+    assert ok is not None and ok.target.pid == "RPM" and ok.adhoc is True
+
+    assert safe_adhoc_step({"action": "insert", "step": {"pid": "BOOST", "low": 1, "high": 2}}) is None
+    assert safe_adhoc_step({"action": "insert", "step": {"pid": "RPM", "low": 0, "high": 9000}}) is None
+    assert safe_adhoc_step({"action": "skip"}) is None  # not an insert
+    assert safe_adhoc_step("nonsense") is None
