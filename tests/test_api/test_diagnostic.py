@@ -1,5 +1,6 @@
 import asyncio
 import json
+from unittest.mock import MagicMock
 
 import anyio
 import pytest
@@ -55,9 +56,13 @@ async def test_diagnostic_stream_runs_and_persists(tmp_path, monkeypatch):
     app.state.telemetry_manager = TelemetryManager(host, app.state.session_factory, settings)
     _seed_vehicle(app)
 
-    # Force the runner to use the fake provider (no OpenAI key in tests).
+    # Force the runner to use the fake provider + a fake embedding backend (no OpenAI key in
+    # tests) — same pattern as tests/test_api/test_chat.py.
     import app.services.factories as factories
     monkeypatch.setattr(factories, "OpenAIProvider", lambda **kw: _FakeProvider())
+    _fake_embedding = MagicMock()
+    _fake_embedding.embed_query.return_value = [0.0, 1.0]
+    monkeypatch.setattr(factories, "make_embedding_service", lambda s: _fake_embedding)
 
     # Use a fast single-step protocol so the test completes in seconds against the real ~1 Hz
     # sampler (the real DEFAULT_PROTOCOL has 15 s dwells / 45 s timeouts).

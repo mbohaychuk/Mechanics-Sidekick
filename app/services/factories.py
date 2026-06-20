@@ -89,24 +89,10 @@ def make_diagnostic_runner(session_factory, settings, manager, host, vehicle_id,
         from tavily import TavilyClient
         web_client = TavilyClient(api_key=settings.tavily_api_key)
 
-    # Defer embedding service construction until embed_query is actually called;
-    # this avoids requiring an OpenAI key when no document chunks exist.
-    _embed_cache: list = []
-
-    def _get_embedding():
-        if not _embed_cache:
-            _embed_cache.append(make_embedding_service(settings))
-        return _embed_cache[0]
-
-    class _LazyEmbedding:
-        def embed_query(self, q: str) -> list[float]:
-            return _get_embedding().embed_query(q)
-
-        def embed_texts(self, texts: list[str]) -> list[list[float]]:
-            return _get_embedding().embed_texts(texts)
+    embedding = make_embedding_service(settings)
 
     def diagnoser_factory(session):
-        retrieval = RetrievalService(ChunkRepository(session), _LazyEmbedding(), settings.top_k_chunks)
+        retrieval = RetrievalService(ChunkRepository(session), embedding, settings.top_k_chunks)
         return Diagnoser(retrieval, DocumentRepository(session), web_client, vehicle_id, settings)
 
     return DiagnosticSessionRunner(
