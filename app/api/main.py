@@ -3,8 +3,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -77,6 +78,12 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+        # Centralized logging for unhandled errors on non-streaming routes; never leak the trace.
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
