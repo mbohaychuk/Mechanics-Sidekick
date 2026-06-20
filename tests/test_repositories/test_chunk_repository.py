@@ -33,6 +33,29 @@ def test_bulk_create_and_list_by_vehicle(db_session, vehicle_and_ready_doc):
     assert results[0].content == "Torque spec is 129 Nm"
 
 
+def test_list_by_vehicle_isolates_across_vehicles(db_session):
+    # The multi-tenant invariant: one vehicle's retrieval must never see another's chunks.
+    vr = VehicleRepository(db_session)
+    dr = DocumentRepository(db_session)
+    v1 = vr.create(year=2018, make="Ford", model="F-150", engine="5.0L")
+    v2 = vr.create(year=2020, make="Honda", model="Civic", engine="1.5L")
+    db_session.flush()
+    d1 = dr.create(v1.id, "ford.pdf", "/tmp/ford.pdf")
+    d1.processing_status = "ready"
+    d2 = dr.create(v2.id, "honda.pdf", "/tmp/honda.pdf")
+    d2.processing_status = "ready"
+    db_session.flush()
+
+    ChunkRepository(db_session).bulk_create([
+        DocumentChunk(document_id=d1.id, chunk_index=0, page_number=1, content="Ford torque spec", embedding_json="[0.1]"),
+        DocumentChunk(document_id=d2.id, chunk_index=0, page_number=1, content="Honda torque spec", embedding_json="[0.2]"),
+    ])
+    db_session.flush()
+
+    results = ChunkRepository(db_session).list_by_vehicle(v1.id)
+    assert [c.content for c in results] == ["Ford torque spec"]  # no Honda content leaks across
+
+
 def test_list_by_vehicle_excludes_pending_docs(db_session):
     vehicle = VehicleRepository(db_session).create(year=2019, make="GM", model="Sierra", engine="5.3L")
     db_session.flush()
