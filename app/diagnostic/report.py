@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 
@@ -64,9 +65,6 @@ def report_from_json(d: dict) -> HealthReport:
         ],
     )
 
-
-import json as _json
-
 REPORT_SYSTEM = (
     "You are a master automotive technician writing a concise vehicle health report. "
     "You are given the vehicle, a list of findings (each with a system, severity, observation, "
@@ -101,7 +99,7 @@ class ReportBuilder:
         }
         messages = [
             {"role": "system", "content": REPORT_SYSTEM},
-            {"role": "user", "content": _json.dumps(payload)},
+            {"role": "user", "content": json.dumps(payload)},
         ]
         turn = None
         for ev in self._provider.stream_turn(
@@ -114,11 +112,11 @@ class ReportBuilder:
         summary = "Diagnostic test complete."
         per_system: dict = {}
         try:
-            data = _json.loads(raw)
+            data = json.loads(raw)
             if isinstance(data, dict):
                 summary = str(data.get("summary") or summary)
                 per_system = data.get("findings") or {}
-        except _json.JSONDecodeError:
+        except json.JSONDecodeError:
             pass
 
         for f in findings:
