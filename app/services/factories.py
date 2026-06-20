@@ -11,6 +11,7 @@ from app.diagnostic.session import DiagnosticSessionRunner
 from app.models.vehicle import Vehicle
 from app.repositories.chat_repository import ChatRepository
 from app.repositories.chunk_repository import ChunkRepository
+from app.repositories.diagnostic_session_repository import DiagnosticSessionRepository
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.job_repository import JobRepository
 from app.repositories.vehicle_repository import VehicleRepository
@@ -67,6 +68,7 @@ def make_chat_orchestrator(
         obd_host=obd_host,
         web_search_client=web_search_client,
         web_search_max_results=settings.web_search_max_results,
+        diag_repo=DiagnosticSessionRepository(session),
     )
 
 
