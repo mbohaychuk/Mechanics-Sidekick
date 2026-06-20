@@ -145,7 +145,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
           </div>
 
           <RouterLink
-            :to="`/vehicles/${vehicleId}/diagnostic`"
+            :to="{ name: 'diagnostic', params: { id: vehicleId } }"
             class="rounded-md border border-border px-3 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/70 transition-colors hover:text-accent"
           >Health check</RouterLink>
 
