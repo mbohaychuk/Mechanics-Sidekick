@@ -33,11 +33,6 @@ def summarize_window(samples: list[dict], pids: list[str], max_points: int) -> d
             v = s["values"].get(pid)
             if v and isinstance(v.get("value"), (int, float)):
                 all_nums.append(float(v["value"]))
-        reduced_nums: list[float] = []
-        for s in reduced:
-            v = s["values"].get(pid)
-            if v and isinstance(v.get("value"), (int, float)):
-                reduced_nums.append(float(v["value"]))
         if all_nums:
             out[pid] = {
                 "last": all_nums[-1], "min": min(all_nums), "max": max(all_nums),
