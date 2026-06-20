@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401 — register models with Base before create_all
 from app.agent.mcp_host import build_obd_host
-from app.api.routers import vehicles, jobs, documents, chat, scanner, config, telemetry
+from app.api.routers import vehicles, jobs, documents, chat, scanner, config, telemetry, diagnostic
 from app.config import settings
 from app.db import Base, get_engine, get_session_factory
 from app.telemetry.manager import TelemetryManager
@@ -72,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(scanner.router)
     app.include_router(config.router)
     app.include_router(telemetry.router)
+    app.include_router(diagnostic.router)
 
     spa_dir = Path(settings.spa_dist_dir)
     if spa_dir.is_dir():

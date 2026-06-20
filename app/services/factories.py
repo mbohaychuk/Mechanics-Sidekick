@@ -3,6 +3,12 @@ from sqlalchemy.orm import Session
 from app.agent.orchestrator import AgentOrchestrator
 from app.agent.provider import OpenAIProvider
 from app.config import Settings
+from app.diagnostic.commentary import CommentaryGenerator
+from app.diagnostic.diagnosis import Diagnoser
+from app.diagnostic.protocol import get_protocol
+from app.diagnostic.report import ReportBuilder
+from app.diagnostic.session import DiagnosticSessionRunner
+from app.models.vehicle import Vehicle
 from app.repositories.chat_repository import ChatRepository
 from app.repositories.chunk_repository import ChunkRepository
 from app.repositories.document_repository import DocumentRepository
@@ -61,4 +67,56 @@ def make_chat_orchestrator(
         obd_host=obd_host,
         web_search_client=web_search_client,
         web_search_max_results=settings.web_search_max_results,
+    )
+
+
+def make_diagnostic_runner(session_factory, settings, manager, host, vehicle_id, protocol_name):
+    if manager is None or host is None or not host.available:
+        return None
+
+    s = session_factory()
+    try:
+        vehicle = s.get(Vehicle, vehicle_id)
+        if vehicle is None:
+            return None
+        vehicle_label = f"{vehicle.year} {vehicle.make} {vehicle.model}, engine {vehicle.engine}"
+    finally:
+        s.close()
+
+    provider = OpenAIProvider(api_key=settings.openai_api_key or None, model=settings.openai_chat_model)
+    web_client = None
+    if settings.web_search_enabled and settings.tavily_api_key:
+        from tavily import TavilyClient
+        web_client = TavilyClient(api_key=settings.tavily_api_key)
+
+    # Defer embedding service construction until embed_query is actually called;
+    # this avoids requiring an OpenAI key when no document chunks exist.
+    _embed_cache: list = []
+
+    def _get_embedding():
+        if not _embed_cache:
+            _embed_cache.append(make_embedding_service(settings))
+        return _embed_cache[0]
+
+    class _LazyEmbedding:
+        def embed_query(self, q: str) -> list[float]:
+            return _get_embedding().embed_query(q)
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            return _get_embedding().embed_texts(texts)
+
+    def diagnoser_factory(session):
+        retrieval = RetrievalService(ChunkRepository(session), _LazyEmbedding(), settings.top_k_chunks)
+        return Diagnoser(retrieval, DocumentRepository(session), web_client, vehicle_id, settings)
+
+    return DiagnosticSessionRunner(
+        manager=manager,
+        session_factory=session_factory,
+        vehicle_id=vehicle_id,
+        vehicle_label=vehicle_label,
+        protocol=get_protocol(protocol_name),
+        commentary=CommentaryGenerator(provider, settings),
+        diagnoser_factory=diagnoser_factory,
+        report_builder=ReportBuilder(provider, settings),
+        settings=settings,
     )
