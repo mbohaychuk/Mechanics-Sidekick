@@ -5,8 +5,10 @@ from collections.abc import Iterator
 
 from app.agent.provider import ChatProvider, ToolCall
 from app.agent.tools import (
+    GET_DIAGNOSTICS_TOOL,
     SEARCH_MANUALS_TOOL,
     WEB_SEARCH_TOOL,
+    execute_get_diagnostic_reports,
     execute_search_manuals,
     execute_web_search,
 )
@@ -26,7 +28,10 @@ SYSTEM_PROMPT = (
     "bulletins, and information not in the manuals — use only when the manuals do not cover it). "
     "Ground factual answers in the manuals or live readings; never invent specs or codes. When a "
     "diagnostic code or reading needs interpretation, look it up in the manuals. If a needed tool is "
-    "unavailable (for example, no scanner is connected), say so plainly. Keep answers concise and "
+    "unavailable (for example, no scanner is connected), say so plainly. "
+    "Use get_diagnostic_reports to recall this vehicle's past health-check findings when the user asks "
+    "about its condition, history, or a prior diagnosis. "
+    "Keep answers concise and "
     "mechanic-friendly, and cite the source filename and page for any specification you quote."
 )
 
@@ -45,6 +50,7 @@ class AgentOrchestrator:
         obd_host=None,
         web_search_client=None,
         web_search_max_results: int = 5,
+        diag_repo=None,
     ) -> None:
         self._chat_repo = chat_repo
         self._job_repo = job_repo
@@ -57,6 +63,7 @@ class AgentOrchestrator:
         self._obd_host = obd_host
         self._web_search_client = web_search_client
         self._web_search_max_results = web_search_max_results
+        self._diag_repo = diag_repo
 
     def run(self, job_id: int, user_message: str) -> Iterator[dict]:
         job = self._job_repo.get_by_id(job_id)
@@ -84,6 +91,8 @@ class AgentOrchestrator:
         tools = [SEARCH_MANUALS_TOOL]
         if self._web_search_client is not None:
             tools.append(WEB_SEARCH_TOOL)
+        if self._diag_repo is not None:
+            tools.append(GET_DIAGNOSTICS_TOOL)
         if self._obd_host is not None and self._obd_host.available:
             tools.extend(self._obd_host.openai_tools())
         sources: list[dict] = []
@@ -149,6 +158,10 @@ class AgentOrchestrator:
                 self._web_search_client,
                 tc.arguments.get("query", ""),
                 self._web_search_max_results,
+            )
+        if tc.name == "get_diagnostic_reports" and self._diag_repo is not None:
+            return execute_get_diagnostic_reports(
+                self._diag_repo, vehicle_id, tc.arguments.get("query")
             )
         if self._obd_host is not None and self._obd_host.handles(tc.name):
             return {"sources": [], "model_text": self._obd_host.call(tc.name, tc.arguments)}
