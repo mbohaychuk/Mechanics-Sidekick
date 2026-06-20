@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator
 
 from app.agent.provider import ChatProvider, ToolCall
@@ -17,6 +18,8 @@ from app.repositories.document_repository import DocumentRepository
 from app.repositories.job_repository import JobRepository
 from app.repositories.vehicle_repository import VehicleRepository
 from app.services.retrieval_service import RetrievalService
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You are Mechanic Sidekick, an expert assistant for automotive repair and maintenance. "
@@ -111,7 +114,8 @@ class AgentOrchestrator:
                         yield ev
                     elif ev["type"] == "turn":
                         turn = ev["turn"]
-            except Exception as exc:  # provider/network/rate-limit failure mid-turn
+            except Exception:  # provider/network/rate-limit failure mid-turn
+                logger.exception("Provider failed mid-turn for job %s", job_id)
                 err = "The assistant was interrupted by a provider error before it could answer."
                 self._chat_repo.create(
                     job_id=job_id, role="assistant", content=err, sources_json=json.dumps(sources)
@@ -119,7 +123,8 @@ class AgentOrchestrator:
                 self._chat_repo.session.commit()
                 if sources:
                     yield {"type": "sources", "sources": sources}
-                yield {"type": "error", "detail": f"provider_error: {exc}"}
+                # Generic detail only — never ship the raw exception text to the browser.
+                yield {"type": "error", "detail": "provider_error"}
                 yield {"type": "done"}
                 return
             if turn is None:
@@ -172,6 +177,7 @@ class AgentOrchestrator:
         try:
             return self._dispatch(tc, vehicle_id)
         except Exception as exc:
+            logger.exception("Tool %s failed", tc.name)
             return {"sources": [], "model_text": f"[tool error] {tc.name}: {exc}"}
 
     def _dispatch(self, tc: ToolCall, vehicle_id: int) -> dict:

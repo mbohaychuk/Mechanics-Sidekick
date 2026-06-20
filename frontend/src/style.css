@@ -23,11 +23,14 @@
 html, body, #app { height: 100%; }
 body { background: var(--color-bg); color: var(--color-text); }
 
-/* a11y: a visible keyboard-focus indicator on every focusable control */
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: 2px;
+/* a11y: a fallback keyboard-focus ring for controls that don't define their own.
+   In @layer base so component-level focus styles take precedence; no border-radius
+   override so it doesn't square off rounded controls. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
 /* a11y: respect a user's reduced-motion preference (sparklines, pulses, transitions) */

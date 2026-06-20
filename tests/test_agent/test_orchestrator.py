@@ -185,6 +185,8 @@ def test_provider_failure_persists_assistant_turn(db_session):
     events = list(orch.run(job_id=job_id, user_message="q"))
 
     assert any(e["type"] == "error" and "provider_error" in e["detail"] for e in events)
+    error_text = " ".join(e.get("detail", "") for e in events if e["type"] == "error")
+    assert "network down" not in error_text  # raw exception text must NOT leak to the client
     roles = [m.role for m in ChatRepository(db_session).list_by_job(job_id)]
     assert roles == ["user", "assistant"]  # no silent half-written conversation
 

@@ -232,7 +232,13 @@ def _make_chat_service(session):
     ollama_svc = OllamaService(settings.ollama_base_url)
     # Embed queries with the SAME provider used for ingestion (settings.embed_provider),
     # not a hardcoded Ollama model — otherwise query and corpus vectors don't match.
-    embedding_svc = make_embedding_service(settings)
+    try:
+        embedding_svc = make_embedding_service(settings)
+    except Exception as exc:  # e.g. OpenAI client with no API key
+        raise ValueError(
+            "Embedding provider unavailable — set OPENAI_API_KEY in .env, or set "
+            f"EMBED_PROVIDER=ollama for a fully-local setup. ({exc})"
+        )
     retrieval_svc = RetrievalService(ChunkRepository(session), embedding_svc, settings.top_k_chunks)
 
     return ChatService(
@@ -253,8 +259,8 @@ def _make_chat_service(session):
 def chat_ask(job_id: int, question: str):
     """Ask a single question in a job context."""
     with get_session() as session:
-        svc = _make_chat_service(session)
         try:
+            svc = _make_chat_service(session)
             with console.status("Thinking...", spinner="dots"):
                 answer, sources = svc.ask(job_id=job_id, question=question)
         except ValueError as e:
@@ -297,8 +303,8 @@ def chat_start(job_id: int):
             continue
 
         with get_session() as session:
-            svc = _make_chat_service(session)
             try:
+                svc = _make_chat_service(session)
                 with console.status("Thinking...", spinner="dots"):
                     answer, sources = svc.ask(job_id=job_id, question=question)
             except Exception as e:

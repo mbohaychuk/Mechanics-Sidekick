@@ -11,8 +11,8 @@ class FakeProvider:
         self._raw = raw
         self.calls = []
 
-    def stream_turn(self, messages, tools, max_tokens=None):
-        self.calls.append({"messages": messages, "max_tokens": max_tokens})
+    def stream_turn(self, messages, tools, max_tokens=None, response_format=None):
+        self.calls.append({"messages": messages, "max_tokens": max_tokens, "response_format": response_format})
         from app.agent.provider import ProviderTurn
         yield {"type": "token", "text": self._raw}
         yield {"type": "turn", "turn": ProviderTurn(text=self._raw, tool_calls=[])}
