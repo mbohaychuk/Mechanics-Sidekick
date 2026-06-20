@@ -4,7 +4,11 @@ import numpy as np
 
 
 def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
-    """Return cosine similarity in [-1.0, 1.0]; returns 0.0 if either vector is zero."""
+    """Return cosine similarity in [-1.0, 1.0]; returns 0.0 if either vector is zero
+    or the two vectors have different dimensions (e.g. a heterogeneous corpus after an
+    embed-model/provider swap) — degrade rather than raise deep in the retrieval path."""
+    if len(vec_a) != len(vec_b):
+        return 0.0
     a = np.array(vec_a, dtype=np.float64)
     b = np.array(vec_b, dtype=np.float64)
     denom = np.linalg.norm(a) * np.linalg.norm(b)

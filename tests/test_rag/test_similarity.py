@@ -16,6 +16,24 @@ def test_zero_vector_returns_zero():
     assert cosine_similarity([0.0, 0.0], [1.0, 0.0]) == 0.0
 
 
+def test_cosine_similarity_mismatched_dimensions_returns_zero():
+    # A heterogeneous corpus (e.g. after an embed-model/provider swap) must degrade, not crash.
+    assert cosine_similarity([1.0, 0.0, 0.0], [1.0, 0.0]) == 0.0
+
+
+def test_rank_chunks_degrades_on_dimension_mismatch_instead_of_crashing():
+    good = MagicMock()
+    good.embedding_json = json.dumps([1.0, 0.0])
+    stale = MagicMock()
+    stale.embedding_json = json.dumps([1.0, 0.0, 0.0])  # wrong dimension (legacy embed model)
+
+    results = rank_chunks(query_vec=[1.0, 0.0], chunks=[good, stale], top_k=5)
+
+    assert len(results) == 2
+    assert results[0][0] is good          # the dimension-matching chunk ranks first
+    assert results[-1][1] == 0.0          # the stale chunk scores 0.0 rather than crashing
+
+
 def test_rank_chunks_returns_sorted_descending():
     chunk_a = MagicMock()
     chunk_a.embedding_json = json.dumps([1.0, 0.0, 0.0])

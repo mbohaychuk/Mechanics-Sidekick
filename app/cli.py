@@ -225,12 +225,14 @@ def _make_chat_service(session):
     from app.repositories.chat_repository import ChatRepository
     from app.repositories.chunk_repository import ChunkRepository
     from app.services.ollama_service import OllamaService
-    from app.services.embedding_service import EmbeddingService
+    from app.services.llm_factory import make_embedding_service
     from app.services.retrieval_service import RetrievalService
     from app.services.chat_service import ChatService
 
     ollama_svc = OllamaService(settings.ollama_base_url)
-    embedding_svc = EmbeddingService(ollama_svc, settings.embed_model)
+    # Embed queries with the SAME provider used for ingestion (settings.embed_provider),
+    # not a hardcoded Ollama model — otherwise query and corpus vectors don't match.
+    embedding_svc = make_embedding_service(settings)
     retrieval_svc = RetrievalService(ChunkRepository(session), embedding_svc, settings.top_k_chunks)
 
     return ChatService(
