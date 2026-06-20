@@ -16,6 +16,13 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
+def _error_stream(detail: str):
+    async def gen():
+        yield _sse({"type": "error", "detail": detail})
+        yield _sse({"type": "done"})
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
 @router.post("/vehicles/{vehicle_id}/diagnostic")
 async def start_diagnostic(vehicle_id: int, request: Request, protocol: str = "default"):
     manager = getattr(request.app.state, "telemetry_manager", None)
@@ -23,10 +30,7 @@ async def start_diagnostic(vehicle_id: int, request: Request, protocol: str = "d
     session_factory = request.app.state.session_factory
 
     if manager is None or host is None or not host.available:
-        async def err():
-            yield _sse({"type": "error", "detail": "OBD tool server not running."})
-            yield _sse({"type": "done"})
-        return StreamingResponse(err(), media_type="text/event-stream")
+        return _error_stream("OBD tool server not running.")
 
     if manager.active_vehicle_id is not None and manager.active_vehicle_id != vehicle_id:
         raise HTTPException(
@@ -36,10 +40,7 @@ async def start_diagnostic(vehicle_id: int, request: Request, protocol: str = "d
 
     runner = make_diagnostic_runner(session_factory, settings, manager, host, vehicle_id, protocol)
     if runner is None:
-        async def err2():
-            yield _sse({"type": "error", "detail": "Vehicle not found or diagnostics unavailable."})
-            yield _sse({"type": "done"})
-        return StreamingResponse(err2(), media_type="text/event-stream")
+        return _error_stream("Vehicle not found or diagnostics unavailable.")
 
     async def stream():
         async for event in runner.run():

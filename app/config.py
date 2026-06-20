@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     diag_idle_rpm_jitter: float = 150.0
     diag_manual_min_score: float = 0.35
     diag_report_recent_limit: int = 3
+    diag_report_max_tokens: int = 600
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

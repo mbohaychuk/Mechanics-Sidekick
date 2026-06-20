@@ -107,7 +107,10 @@ def execute_get_diagnostic_reports(diag_repo, vehicle_id: int, query: str | None
         sources.append({"kind": "diagnostic", "session_id": r.id, "date": date,
                         "overall_status": r.overall_status or "unknown"})
         report = json.loads(r.report_json) if r.report_json else {"findings": []}
-        lines = [f"Health check {date} — overall {r.overall_status or 'unknown'}: {r.summary or ''}"]
+        header = f"Health check {date} — overall {r.overall_status or 'unknown'}"
+        if r.summary:
+            header += f": {r.summary}"
+        lines = [header]
         for f in report.get("findings", []):
             text = (f"  - {f.get('system')} [{f.get('severity')}]: {f.get('observation')}. "
                     f"{f.get('interpretation', '')} Recommendation: {f.get('recommendation', '')}")

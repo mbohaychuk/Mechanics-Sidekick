@@ -15,7 +15,7 @@ def test_lean_fuel_trim_flags_warn():
 
 def test_rich_fuel_trim_flags():
     flags = evaluate(_v(SHORT_FUEL_TRIM_1=-13.0), S)
-    assert any(f.system == "fuel" and "rich" in f.detail for f in flags)
+    assert any(f.system == "fuel" and "rich" in f.detail and f.severity == "warn" for f in flags)
 
 
 def test_normal_fuel_trim_no_flag():
@@ -49,3 +49,13 @@ def test_window_idle_rpm_jitter():
     samples = [{"seq": i, "t": i * 1000, "values": _v(RPM=rpms[i])} for i in range(5)]
     flags = evaluate_window(samples, S)
     assert any(f.system == "idle" for f in flags)
+
+
+def test_window_o2_insufficient_samples():
+    samples = [{"seq": i, "t": i * 1000, "values": _v(O2_B1S1=0.45)} for i in range(4)]
+    flags = evaluate_window(samples, S)
+    assert not any(f.system == "o2" for f in flags)
+
+
+def test_evaluate_inner_none_ignored():
+    assert evaluate({"COOLANT_TEMP": {"value": None, "unit": None}}, S) == []

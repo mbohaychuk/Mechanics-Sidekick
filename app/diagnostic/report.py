@@ -103,7 +103,7 @@ class ReportBuilder:
         ]
         turn = None
         for ev in self._provider.stream_turn(
-            messages, [], max_tokens=self._settings.diag_commentary_max_tokens * 6
+            messages, [], max_tokens=self._settings.diag_report_max_tokens
         ):
             if ev["type"] == "turn":
                 turn = ev["turn"]

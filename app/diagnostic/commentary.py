@@ -31,7 +31,7 @@ def summarize_window(samples: list[dict], pids: list[str], max_points: int) -> d
         all_nums: list[float] = []
         for s in samples:
             v = s["values"].get(pid)
-            if v and isinstance(v.get("value"), (int, float)):
+            if v is not None and isinstance(v.get("value"), (int, float)):
                 all_nums.append(float(v["value"]))
         if all_nums:
             out[pid] = {

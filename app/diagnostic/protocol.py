@@ -114,7 +114,7 @@ def safe_adhoc_step(directive: object) -> Step | None:
 
 def _num(values: dict, pid: str) -> float | None:
     v = values.get(pid)
-    if v and isinstance(v.get("value"), (int, float)):
+    if v is not None and isinstance(v.get("value"), (int, float)):
         return float(v["value"])
     return None
 

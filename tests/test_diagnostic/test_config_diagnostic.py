@@ -15,3 +15,4 @@ def test_diagnostic_settings_defaults():
     assert s.diag_idle_rpm_jitter == 150.0
     assert s.diag_manual_min_score == 0.35
     assert s.diag_report_recent_limit == 3
+    assert s.diag_report_max_tokens == 600

@@ -72,7 +72,7 @@ def make_chat_orchestrator(
     )
 
 
-def make_diagnostic_runner(session_factory, settings, manager, host, vehicle_id, protocol_name):
+def make_diagnostic_runner(session_factory, settings: Settings, manager, host, vehicle_id: int, protocol_name: str) -> DiagnosticSessionRunner | None:
     if manager is None or host is None or not host.available:
         return None
 
