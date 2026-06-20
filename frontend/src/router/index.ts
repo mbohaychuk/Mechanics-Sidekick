@@ -9,5 +9,6 @@ export const router = createRouter({
     { path: '/vehicles/:id/diagnostic', name: 'diagnostic', component: () => import('@/views/DiagnosticSessionView.vue') },
     { path: '/jobs/:id/chat', name: 'chat', component: () => import('@/views/ChatView.vue') },
     { path: '/settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue') },
   ],
 })
