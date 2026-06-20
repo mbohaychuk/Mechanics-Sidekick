@@ -39,7 +39,7 @@ export function useDiagnosticSession(vehicleId: number) {
       const existing = steps.value[event.index]
       const view: StepView = {
         id: event.id, label: event.label, instruction: event.instruction,
-        state: event.state === 'active' ? 'active' : event.state, adhoc: event.adhoc,
+        state: event.state, adhoc: event.adhoc,
       }
       if (existing) steps.value[event.index] = view
       else steps.value.splice(event.index, 0, view)

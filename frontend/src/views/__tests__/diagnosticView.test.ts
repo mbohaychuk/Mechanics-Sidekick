@@ -40,7 +40,7 @@ describe('DiagnosticSessionView', () => {
       protocol: [{ id: 'idle_baseline', label: 'Idle baseline', instruction: 'Let it idle' }],
     })
     handlers.current!({ type: 'step', index: 0, total: 1, id: 'idle_baseline', label: 'Idle baseline', instruction: 'Let it idle', state: 'active', adhoc: false })
-    handlers.current!({ type: 'sample', seq: 1, t: 0, values: { RPM: { value: 700, unit: 'rpm' } } })
+    handlers.current!({ type: 'sample', seq: 1, t: 0, hz: 1, values: { RPM: { value: 700, unit: 'rpm' } } })
     handlers.current!({ type: 'commentary', text: 'Idle looks steady.', t: 0 })
     await flushPromises()
 

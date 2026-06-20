@@ -33,8 +33,8 @@ describe('useDiagnosticSession', () => {
     expect(d.steps.value[0].state).toBe('active')
     expect(d.currentIndex.value).toBe(0)
 
-    handlers.current!({ type: 'sample', seq: 1, t: 0, values: { RPM: { value: 700, unit: 'rpm' } } })
-    handlers.current!({ type: 'sample', seq: 2, t: 1000, values: { RPM: { value: 720, unit: 'rpm' } } })
+    handlers.current!({ type: 'sample', seq: 1, t: 0, hz: 1, values: { RPM: { value: 700, unit: 'rpm' } } })
+    handlers.current!({ type: 'sample', seq: 2, t: 1000, hz: 1, values: { RPM: { value: 720, unit: 'rpm' } } })
     expect(d.latest.RPM!.value).toBe(720)
     expect(d.series.RPM).toEqual([[0, 700], [1000, 720]])
 

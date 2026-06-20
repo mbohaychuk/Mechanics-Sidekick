@@ -8,7 +8,7 @@ describe('MessageBubble sources', () => {
       props: { role: 'assistant', content: 'Use 5W-30.', sources: [{ filename: 'm.pdf', page: 3 }] },
     })
     expect(w.text()).toContain('m.pdf')
-    expect(w.text()).toContain('3')
+    expect(w.text()).toContain('p.3')
   })
 
   it('renders a diagnostic source (date + status)', () => {

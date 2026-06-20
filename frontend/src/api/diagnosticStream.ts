@@ -3,7 +3,7 @@ import type { LiveValue } from '@/api/types'
 export type DiagnosticStreamEvent =
   | { type: 'session'; diagnostic_session_id: number; live_session_id: number;
       protocol: { id: string; label: string; instruction: string }[]; vin_mismatch?: string }
-  | { type: 'sample'; seq: number; t: number; values: Record<string, LiveValue | null> }
+  | { type: 'sample'; seq: number; t: number; hz: number; values: Record<string, LiveValue | null> }
   | { type: 'step'; index: number; total: number; id: string; label: string;
       instruction: string; state: 'active' | 'done' | 'skipped'; adhoc: boolean }
   | { type: 'commentary'; text: string; t: number }
