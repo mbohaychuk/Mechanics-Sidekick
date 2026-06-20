@@ -88,7 +88,7 @@ Browser (Vue SPA) ──/api──▶ FastAPI ──┬─ agent loop (OpenAI to
 ```bash
 git clone https://github.com/mbohaychuk/Mechanics-Sidekick.git
 cd Mechanics-Sidekick
-uv sync                        # backend deps
+uv sync --group dev            # backend deps (incl. tests)
 cd frontend && npm install     # frontend deps
 ```
 

@@ -211,6 +211,10 @@ data/documents/*
 
 # Local editor config
 
+# Audit + browser-automation output (local working artifacts — never commit)
+audit/
+.playwright-mcp/
+
 # Frontend
 frontend/node_modules/
 frontend/dist/
