@@ -6,6 +6,7 @@ from app.models.job import Job
 from app.models.chat_message import ChatMessage
 from app.models.live_session import LiveSession
 from app.models.live_sample import LiveSample
+from app.models.diagnostic_session import DiagnosticSession
 
 __all__ = [
     "Vehicle",
@@ -15,4 +16,5 @@ __all__ = [
     "ChatMessage",
     "LiveSession",
     "LiveSample",
+    "DiagnosticSession",
 ]

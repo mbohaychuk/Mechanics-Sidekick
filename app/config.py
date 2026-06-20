@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     live_max_pids: int = 16
     live_subscriber_queue: int = 2
     live_recorder_batch: int = 20
+    diag_enabled: bool = True
+    diag_protocol: str = "default"
+    diag_commentary_interval_s: float = 5.0
+    diag_commentary_max_tokens: int = 160
+    diag_commentary_window_s: float = 15.0
+    diag_commentary_max_points: int = 20
+    diag_max_adhoc_steps: int = 2
+    diag_fuel_trim_pct: float = 10.0
+    diag_coolant_max_c: float = 105.0
+    diag_idle_rpm_jitter: float = 150.0
+    diag_manual_min_score: float = 0.35
+    diag_report_recent_limit: int = 3
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
