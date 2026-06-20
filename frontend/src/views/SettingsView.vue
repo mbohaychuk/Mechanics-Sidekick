@@ -29,8 +29,13 @@ function yn(v: boolean | undefined) {
       </p>
     </div>
 
+    <!-- Error -->
+    <p v-if="config.error" class="rounded-md border border-danger/30 bg-danger/8 px-4 py-3 font-mono text-sm text-danger">
+      Couldn't load config: {{ config.error }}
+    </p>
+
     <!-- Loading skeleton -->
-    <div v-if="!config.config" class="space-y-3">
+    <div v-else-if="!config.config" class="space-y-3">
       <div v-for="i in 5" :key="i" class="h-10 animate-pulse rounded-md bg-surface-2" />
     </div>
 
