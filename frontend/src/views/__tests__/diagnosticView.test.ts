@@ -91,4 +91,23 @@ describe('DiagnosticSessionView', () => {
     expect(api.getDiagnosticSession).toHaveBeenCalledWith(7)
     expect(wrapper.text()).toContain('Minor fuel trim drift detected on bank 1.')
   })
+
+  it('refreshes the past-reports list when a live run completes', async () => {
+    (api.listDiagnosticReports as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([]) // on mount: none yet
+      .mockResolvedValueOnce([
+        { id: 9, status: 'complete', protocol_name: 'default', started_utc: '2026-06-20T09:00:00',
+          ended_utc: '2026-06-20T09:05:00', overall_status: 'good', summary: 'Freshly generated report.' },
+      ]) // after the run completes
+
+    const wrapper = await mountAt('1')
+    await wrapper.find('[data-test="start"]').trigger('click')
+    await flushPromises()
+
+    handlers.current!({ type: 'report', overall_status: 'good', summary: 'Live.', findings: [] })
+    handlers.current!({ type: 'done' })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Freshly generated report.')
+  })
 })

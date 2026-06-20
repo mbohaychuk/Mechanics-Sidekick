@@ -20,8 +20,8 @@ function fmtDate(iso: string): string {
   const dt = new Date(iso)
   return Number.isNaN(dt.getTime()) ? iso : dt.toLocaleString()
 }
-function statusClass(s: 'good' | 'fair' | 'poor'): string {
-  return { good: 'text-success', fair: 'text-warning', poor: 'text-danger' }[s]
+function statusClass(s: 'good' | 'fair' | 'poor' | null): string {
+  return s ? { good: 'text-success', fair: 'text-warning', poor: 'text-danger' }[s] : ''
 }
 const vitalNames = computed(() => Object.keys(d.latest))
 const focusSeries = computed(() =>

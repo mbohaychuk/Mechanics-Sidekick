@@ -34,3 +34,10 @@ def test_spa_fallback_does_not_mask_unknown_api_404(spa_client):
     r = spa_client.get("/api/does-not-exist")
     assert r.status_code == 404
     assert "id='app'" not in r.text
+
+
+def test_spa_fallback_serves_client_routes_that_merely_start_with_api(spa_client):
+    # A client route like /apiary must load the SPA — only real /api/* routes should 404.
+    r = spa_client.get("/apiary")
+    assert r.status_code == 200
+    assert "id='app'" in r.text

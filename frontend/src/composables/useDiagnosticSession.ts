@@ -64,6 +64,7 @@ export function useDiagnosticSession(vehicleId: number) {
       report.value = { overall_status: event.overall_status, summary: event.summary, findings: event.findings }
     } else if (event.type === 'done') {
       if (status.value !== 'error') status.value = 'complete'
+      void loadPastReports()
     } else if (event.type === 'error') {
       status.value = 'error'
       detail.value = event.detail
@@ -78,6 +79,7 @@ export function useDiagnosticSession(vehicleId: number) {
     commentary.value = []
     anomalies.value = []
     report.value = null
+    viewedReport.value = null
     currentIndex.value = -1
     for (const k of Object.keys(latest)) delete latest[k]
     for (const k of Object.keys(series)) delete series[k]
@@ -104,7 +106,7 @@ export function useDiagnosticSession(vehicleId: number) {
     try {
       pastReports.value = await api.listDiagnosticReports(vehicleId)
     } catch (err) {
-      pastError.value = (err as Error).message
+      pastError.value = err instanceof Error ? err.message : String(err)
     }
   }
 
@@ -113,7 +115,7 @@ export function useDiagnosticSession(vehicleId: number) {
     try {
       viewedReport.value = (await api.getDiagnosticSession(sessionId)).report
     } catch (err) {
-      pastError.value = (err as Error).message
+      pastError.value = err instanceof Error ? err.message : String(err)
     }
   }
 
