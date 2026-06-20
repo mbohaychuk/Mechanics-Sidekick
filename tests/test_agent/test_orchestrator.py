@@ -152,6 +152,25 @@ def test_tool_failure_degrades_and_loop_continues(db_session):
     assert any(m.role == "assistant" and "answer" in m.content.lower() for m in history)
 
 
+def test_multiple_tool_calls_in_one_turn(db_session):
+    # A single turn returning >1 tool_call must execute each and pair tool results by id.
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
+    provider = FakeProvider([
+        ProviderTurn(text="", tool_calls=[
+            ToolCall(id="a", name="search_manuals", arguments={"query": "brakes"}),
+            ToolCall(id="b", name="search_manuals", arguments={"query": "oil"}),
+        ]),
+        ProviderTurn(text="Done.", tool_calls=[]),
+    ])
+    orch = _orchestrator(db_session, provider)
+
+    events = list(orch.run(job_id=job_id, user_message="q"))
+
+    assert len([e for e in events if e["type"] == "tool_result"]) == 2  # both executed
+    assert events[-1]["type"] == "done"
+
+
 class _ExplodingProvider:
     def stream_turn(self, messages, tools):
         raise RuntimeError("network down")
