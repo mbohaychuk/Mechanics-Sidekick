@@ -64,6 +64,12 @@ class DocumentService:
             raw_chunks = self._chunking_service.chunk_blocks(page_blocks)
             total = len(raw_chunks)
 
+            if total == 0:
+                # No extractable text (scanned / image-only / empty PDF) — flag it instead of
+                # silently marking the document "ready" with nothing for the assistant to use.
+                self._doc_repo.update_status(doc.id, "no_text")
+                return doc
+
             contexts = [
                 self._contextualization_service.generate_context(
                     chunk_content=c["content"],

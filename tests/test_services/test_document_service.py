@@ -77,6 +77,20 @@ def test_add_document_creates_record_copies_file_and_stores_chunks(db_session, v
     assert json.loads(chunks[0].embedding_json) == [0.1, 0.2, 0.3]
 
 
+def test_add_document_with_no_extractable_text_is_marked_no_text(db_session, vehicle, sample_pdf, tmp_path):
+    # A scanned / image-only PDF yields zero chunks; it must NOT be marked "ready" silently.
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    svc = _make_svc(db_session, str(tmp_path / "docs"), mock_embedding)
+    svc._chunking_service.chunk_blocks.return_value = []
+
+    doc = svc.add_document(vehicle_id=vehicle.id, pdf_path=str(sample_pdf))
+    db_session.flush()
+
+    assert doc.processing_status == "no_text"
+    mock_embedding.embed_texts.assert_not_called()
+    assert ChunkRepository(db_session).list_by_vehicle(vehicle.id) == []
+
+
 def test_add_document_raises_when_file_missing(db_session, vehicle, tmp_path):
     mock_embedding = MagicMock(spec=EmbeddingService)
     svc = _make_svc(db_session, str(tmp_path / "docs"), mock_embedding)

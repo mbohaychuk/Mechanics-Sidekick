@@ -95,3 +95,19 @@ def test_chunk_index_is_sequential():
 def test_empty_pages_returns_no_chunks():
     svc = StructuredChunkingService()
     assert svc.chunk_blocks([]) == []
+
+
+def test_chunk_cites_dominant_page_when_spanning_a_boundary():
+    # A chunk whose content is mostly on page 6 must cite page 6, not page 5 (its first word).
+    svc = StructuredChunkingService(chunk_size=4, chunk_overlap=0)
+    pages = [
+        _make_page(5, [
+            _make_block([_make_line([_make_span("SPECIFICATIONS", size=12.0, bold=True)])]),
+            _make_block([_make_line([_make_span("intro", size=12.0)])]),
+        ]),
+        _make_page(6, [
+            _make_block([_make_line([_make_span("torque is 23nm", size=12.0)])]),
+        ]),
+    ]
+    chunks = svc.chunk_blocks(pages)
+    assert chunks[0]["page_number"] == 6
