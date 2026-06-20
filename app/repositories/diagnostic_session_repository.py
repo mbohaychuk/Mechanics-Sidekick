@@ -48,7 +48,7 @@ class DiagnosticSessionRepository:
     def get_by_id(self, session_id: int) -> DiagnosticSession | None:
         return self.session.get(DiagnosticSession, session_id)
 
-    def list_by_vehicle(self, vehicle_id: int, limit: int | None = None):
+    def list_by_vehicle(self, vehicle_id: int, limit: int | None = None) -> list[DiagnosticSession]:
         q = (
             self.session.query(DiagnosticSession)
             .filter(DiagnosticSession.vehicle_id == vehicle_id)
