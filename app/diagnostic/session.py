@@ -187,6 +187,9 @@ class DiagnosticSessionRunner:
             session.close()
 
     def _analyze(self, session, recorded) -> tuple[dict, list]:
+        # v1 always analyzes the full authoritative recording fetched from the DB, not subsets
+        # bounded by each step's seq_start/seq_end — those ranges are tracked but reserved for
+        # future per-step drill-down analysis and are not load-bearing here.
         flags = list(evaluate_window(recorded, self._settings))
         seen = set()
         for s in recorded:

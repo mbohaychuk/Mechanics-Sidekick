@@ -18,17 +18,56 @@ def _seed_completed(db_session, vehicle_id, overall, summary, findings):
 
 
 def test_digest_includes_findings_and_citation_source(db_session):
+    import re
     db_session.add(Vehicle(year=2004, make="Audi", model="A8", engine="4.2L", vin="X"))
     db_session.commit()
     sid = _seed_completed(db_session, 1, "fair", "One lean bank.", [
         {"system": "fuel", "severity": "warn", "observation": "LTFT +14%",
          "interpretation": "Lean.", "recommendation": "Check vacuum leak.", "evidence": {}},
     ])
+    row = DiagnosticSessionRepository(db_session).get_by_id(sid)
+    expected_date = row.ended_utc.date().isoformat()
     out = execute_get_diagnostic_reports(DiagnosticSessionRepository(db_session), vehicle_id=1)
     assert "fuel" in out["model_text"]
     assert "Check vacuum leak." in out["model_text"]
+    actual_date = out["sources"][0]["date"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", actual_date), f"date not ISO: {actual_date!r}"
+    assert actual_date == expected_date
     assert out["sources"][0] == {"kind": "diagnostic", "session_id": sid,
-                                 "date": out["sources"][0]["date"], "overall_status": "fair"}
+                                 "date": expected_date, "overall_status": "fair"}
+
+
+def test_completed_report_returned_when_newer_rows_are_non_completed(db_session):
+    """limit=3 must not cut off the completed row when the 3 newest rows have other statuses."""
+    db_session.add(Vehicle(year=2004, make="Audi", model="A8", engine="4.2L", vin="X"))
+    db_session.commit()
+    repo = DiagnosticSessionRepository(db_session)
+
+    # Seed the oldest row as completed
+    oldest = repo.create(vehicle_id=1, live_session_id=None, protocol_name="default")
+    db_session.commit()
+    repo.complete(oldest.id, overall_status="good", summary="all clear",
+                  report_json=json.dumps({"overall_status": "good", "summary": "all clear",
+                                          "findings": [{"system": "fuel", "severity": "ok",
+                                                         "observation": "normal",
+                                                         "interpretation": "",
+                                                         "recommendation": "none", "evidence": {}}]}),
+                  commentary_json="[]")
+    db_session.commit()
+
+    # Three newer rows with non-completed statuses
+    for _ in range(2):
+        repo.create(vehicle_id=1, live_session_id=None, protocol_name="default")
+        db_session.commit()
+    err = repo.create(vehicle_id=1, live_session_id=None, protocol_name="default")
+    db_session.commit()
+    repo.mark_error(err.id)
+    db_session.commit()
+
+    out = execute_get_diagnostic_reports(repo, vehicle_id=1, limit=3)
+    assert len(out["sources"]) == 1
+    assert out["sources"][0]["session_id"] == oldest.id
+    assert "all clear" in out["model_text"]
 
 
 def test_no_reports_returns_friendly_text(db_session):

@@ -48,12 +48,16 @@ class DiagnosticSessionRepository:
     def get_by_id(self, session_id: int) -> DiagnosticSession | None:
         return self.session.get(DiagnosticSession, session_id)
 
-    def list_by_vehicle(self, vehicle_id: int, limit: int | None = None) -> list[DiagnosticSession]:
+    def list_by_vehicle(
+        self, vehicle_id: int, limit: int | None = None, status: str | None = None
+    ) -> list[DiagnosticSession]:
         q = (
             self.session.query(DiagnosticSession)
             .filter(DiagnosticSession.vehicle_id == vehicle_id)
-            .order_by(DiagnosticSession.id.desc())
         )
+        if status is not None:
+            q = q.filter(DiagnosticSession.status == status)
+        q = q.order_by(DiagnosticSession.id.desc())
         if limit is not None:
             q = q.limit(limit)
         return q.all()

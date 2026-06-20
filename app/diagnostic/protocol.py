@@ -97,8 +97,12 @@ def safe_adhoc_step(directive: object) -> Step | None:
     lo_lim, hi_lim = ADHOC_PID_LIMITS[pid]
     low, high = step.get("low"), step.get("high")
     for bound in (low, high):
-        if bound is not None and not (lo_lim <= float(bound) <= hi_lim):
-            return None
+        if bound is not None:
+            try:
+                if not (lo_lim <= float(bound) <= hi_lim):
+                    return None
+            except (TypeError, ValueError):
+                return None
     label = str(step.get("label") or f"Hold {pid}")[:80]
     instruction = str(step.get("instruction") or f"Hold {pid} in range.")[:200]
     return Step(

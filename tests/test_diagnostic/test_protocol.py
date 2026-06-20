@@ -93,3 +93,8 @@ def test_safe_adhoc_step_validates_vocabulary_and_bounds():
     assert safe_adhoc_step({"action": "insert", "step": {"pid": "RPM", "low": 0, "high": 9000}}) is None
     assert safe_adhoc_step({"action": "skip"}) is None  # not an insert
     assert safe_adhoc_step("nonsense") is None
+
+
+def test_safe_adhoc_step_rejects_non_numeric_bound():
+    # A malformed LLM directive with a string bound must return None, not raise ValueError.
+    assert safe_adhoc_step({"action": "insert", "step": {"pid": "RPM", "low": "abc"}}) is None

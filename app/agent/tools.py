@@ -1,3 +1,5 @@
+import json
+
 from app.repositories.document_repository import DocumentRepository
 from app.services.retrieval_service import RetrievalService
 
@@ -93,9 +95,7 @@ GET_DIAGNOSTICS_TOOL = {
 
 def execute_get_diagnostic_reports(diag_repo, vehicle_id: int, query: str | None = None,
                                    limit: int = 3) -> dict:
-    import json as _json
-
-    rows = [r for r in diag_repo.list_by_vehicle(vehicle_id, limit=limit) if r.status == "completed"]
+    rows = diag_repo.list_by_vehicle(vehicle_id, limit=limit, status="completed")
     if not rows:
         return {"sources": [], "model_text": "No diagnostic health reports on file for this vehicle yet."}
 
@@ -106,7 +106,7 @@ def execute_get_diagnostic_reports(diag_repo, vehicle_id: int, query: str | None
         date = r.ended_utc.date().isoformat() if r.ended_utc else r.started_utc.date().isoformat()
         sources.append({"kind": "diagnostic", "session_id": r.id, "date": date,
                         "overall_status": r.overall_status or "unknown"})
-        report = _json.loads(r.report_json) if r.report_json else {"findings": []}
+        report = json.loads(r.report_json) if r.report_json else {"findings": []}
         lines = [f"Health check {date} — overall {r.overall_status or 'unknown'}: {r.summary or ''}"]
         for f in report.get("findings", []):
             text = (f"  - {f.get('system')} [{f.get('severity')}]: {f.get('observation')}. "
