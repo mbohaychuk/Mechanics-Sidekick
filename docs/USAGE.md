@@ -105,9 +105,6 @@ a cited answer in under two minutes with five source rows (filename + page).
   slow once you cross thousands of chunks per vehicle.
 - All retrieval is **vehicle-scoped, not job-scoped** — every job on the same
   vehicle sees every document on that vehicle.
-- The project's `CLAUDE.md` lists stale model names (`gpt-oss:20b`,
-  `qwen3-embedding:4b`). The README, `app/config.py`, and `.env` are the
-  source of truth: `llama3.2:3b` + `nomic-embed-text`.
 
 ## Stop / cleanup
 
