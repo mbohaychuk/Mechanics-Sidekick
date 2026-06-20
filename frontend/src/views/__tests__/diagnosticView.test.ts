@@ -42,12 +42,14 @@ describe('DiagnosticSessionView', () => {
     handlers.current!({ type: 'step', index: 0, total: 1, id: 'idle_baseline', label: 'Idle baseline', instruction: 'Let it idle', state: 'active', adhoc: false })
     handlers.current!({ type: 'sample', seq: 1, t: 0, hz: 1, values: { RPM: { value: 700, unit: 'rpm' } } })
     handlers.current!({ type: 'commentary', text: 'Idle looks steady.', t: 0 })
+    handlers.current!({ type: 'anomaly', system: 'fuel', severity: 'warn', pid: 'LONG_FUEL_TRIM_1', detail: '+14% lean' })
     await flushPromises()
 
     expect(wrapper.text()).toContain('Idle baseline')
     expect(wrapper.text()).toContain('Idle looks steady.')
     expect(wrapper.text()).toContain('RPM')
-    expect(wrapper.findAll('.v-chart-stub').length).toBeGreaterThanOrEqual(1)
+    expect(wrapper.findAll('.v-chart-stub').length).toBe(1)
+    expect(wrapper.text()).toContain('+14% lean')
 
     handlers.current!({ type: 'report', overall_status: 'good', summary: 'All clear.', findings: [] })
     handlers.current!({ type: 'done' })

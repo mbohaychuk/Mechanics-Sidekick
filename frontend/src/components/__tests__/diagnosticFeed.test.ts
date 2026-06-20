@@ -18,6 +18,7 @@ describe('DiagnosticStep', () => {
       props: { index: 1, label: 'Rev', instruction: 'rev to 2500', state: 'active', adhoc: false },
     })
     expect(w.attributes('data-state')).toBe('active')
+    expect(w.html()).toContain('2')
   })
 
   it('tags ad-hoc steps', () => {

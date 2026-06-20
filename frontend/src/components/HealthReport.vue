@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { DiagnosticReport } from '@/api/types'
+import type { DiagnosticReport, DiagnosticFinding } from '@/api/types'
 
 const props = defineProps<{ report: DiagnosticReport }>()
 
@@ -10,7 +10,7 @@ const overallClass = computed(() => ({
   poor: 'border-danger/40 bg-danger/10 text-danger',
 }[props.report.overall_status]))
 
-function sources(evidence: Record<string, unknown>): { filename?: string; page?: number }[] {
+function sources(evidence: DiagnosticFinding['evidence']): { filename?: string; page?: number }[] {
   const s = evidence?.sources
   return Array.isArray(s) ? (s as { filename?: string; page?: number }[]) : []
 }

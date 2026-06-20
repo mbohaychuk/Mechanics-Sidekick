@@ -85,6 +85,20 @@ function toggle() {
           <p v-if="d.steps.value.length === 0" class="px-4 py-6 text-center font-mono text-xs text-muted/30">No active protocol.</p>
         </div>
 
+        <div v-if="d.anomalies.value.length" class="overflow-hidden rounded-card border border-border bg-surface">
+          <div class="border-b border-border/50 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">Live flags</div>
+          <div
+            v-for="(a, i) in d.anomalies.value" :key="i"
+            class="flex items-start gap-3 border-b border-border/50 px-4 py-2 last:border-b-0"
+          >
+            <span class="font-mono text-xs font-semibold uppercase tracking-wider text-text/70">{{ a.system }}</span>
+            <span
+              class="text-xs"
+              :class="a.severity === 'warn' ? 'text-warning' : a.severity === 'fail' ? 'text-danger' : 'text-muted'"
+            >{{ a.detail }}</span>
+          </div>
+        </div>
+
         <div v-if="d.commentary.value.length" class="overflow-hidden rounded-card border border-border bg-surface">
           <div class="border-b border-border/50 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">Live commentary</div>
           <CommentaryItem v-for="(c, i) in d.commentary.value" :key="i" :text="c.text" />

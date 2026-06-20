@@ -1,4 +1,4 @@
-import type { LiveValue } from '@/api/types'
+import type { DiagnosticReport, LiveValue } from '@/api/types'
 
 export type DiagnosticStreamEvent =
   | { type: 'session'; diagnostic_session_id: number; live_session_id: number;
@@ -8,8 +8,7 @@ export type DiagnosticStreamEvent =
       instruction: string; state: 'active' | 'done' | 'skipped'; adhoc: boolean }
   | { type: 'commentary'; text: string; t: number }
   | { type: 'anomaly'; system: string; severity: string; pid: string; detail: string }
-  | { type: 'report'; overall_status: 'good' | 'fair' | 'poor'; summary: string;
-      findings: import('@/api/types').DiagnosticFinding[] }
+  | ({ type: 'report' } & DiagnosticReport)
   | { type: 'done' }
   | { type: 'error'; detail: string }
 
