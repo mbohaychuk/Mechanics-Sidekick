@@ -26,7 +26,9 @@ _OVERALL_BY_RANK = {0: "good", 1: "fair", 2: "poor"}
 
 
 def derive_overall_status(findings: list[Finding]) -> str:
-    worst = max((_SEVERITY_RANK.get(f.severity, 0) for f in findings), default=0)
+    # An unrecognized severity is treated as the WORST bucket, never the healthiest —
+    # "unknown = poor" is the safe default for a vehicle-health tool.
+    worst = max((_SEVERITY_RANK.get(f.severity, 2) for f in findings), default=0)
     return _OVERALL_BY_RANK[worst]
 
 
@@ -103,7 +105,8 @@ class ReportBuilder:
         ]
         turn = None
         for ev in self._provider.stream_turn(
-            messages, [], max_tokens=self._settings.diag_report_max_tokens
+            messages, [], max_tokens=self._settings.diag_report_max_tokens,
+            response_format={"type": "json_object"},  # force valid JSON (no silent parse-failure path)
         ):
             if ev["type"] == "turn":
                 turn = ev["turn"]

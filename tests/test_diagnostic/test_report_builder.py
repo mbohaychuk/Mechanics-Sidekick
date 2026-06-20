@@ -11,8 +11,9 @@ class FakeProvider:
         self._raw = raw
         self.calls = []
 
-    def stream_turn(self, messages, tools, max_tokens=None):
+    def stream_turn(self, messages, tools, max_tokens=None, response_format=None):
         self.calls.append(messages)
+        self.response_format = response_format
         from app.agent.provider import ProviderTurn
         yield {"type": "turn", "turn": ProviderTurn(text=self._raw, tool_calls=[])}
 
@@ -49,3 +50,15 @@ def test_build_survives_bad_json():
     assert report.overall_status == "poor"  # derived from severities regardless
     assert report.summary  # non-empty fallback
     assert {f.system for f in report.findings} == {"cooling", "fuel"}
+
+
+def test_unknown_severity_is_treated_as_worst_not_healthiest():
+    from app.diagnostic.report import derive_overall_status
+    # An unrecognized severity must NOT silently render as "good".
+    assert derive_overall_status([Finding("x", "explode", "weird")]) == "poor"
+
+
+def test_report_requests_json_object_mode():
+    provider = FakeProvider(json.dumps({"summary": "ok", "findings": {}}))
+    ReportBuilder(provider, S).build("v", good_systems={}, diagnoses=[Finding("f", "good", "o")])
+    assert provider.response_format == {"type": "json_object"}
