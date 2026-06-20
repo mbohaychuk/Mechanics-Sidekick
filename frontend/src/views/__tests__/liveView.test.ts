@@ -22,6 +22,7 @@ function mountAt(id: string) {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/vehicles/:id/live', name: 'live', component: LiveView },
     { path: '/vehicles/:id', name: 'vehicle', component: { template: '<div/>' } },
+    { path: '/vehicles/:id/diagnostic', name: 'diagnostic', component: { template: '<div/>' } },
   ] })
   router.push(`/vehicles/${id}/live`)
   return router.isReady().then(() => mount(LiveView, { global: { plugins: [router] } }))

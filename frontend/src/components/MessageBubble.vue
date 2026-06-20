@@ -28,10 +28,19 @@ defineProps<{ role: string; content: string; sources?: Array<Record<string, unkn
           class="flex items-center gap-1.5 font-mono leading-5"
         >
           <span class="text-accent/50 select-none">›</span>
-          <span>{{ (s.filename as string) ?? (s.url as string) }}</span>
-          <template v-if="s.page">
+          <template v-if="s.kind === 'diagnostic'">
+            <span>Health check</span>
             <span class="text-muted/40">·</span>
-            <span class="text-muted/70">p.{{ s.page }}</span>
+            <span class="text-muted/70">{{ s.date }}</span>
+            <span class="text-muted/40">·</span>
+            <span class="uppercase text-muted/70">{{ s.overall_status }}</span>
+          </template>
+          <template v-else>
+            <span>{{ (s.filename as string) ?? (s.url as string) }}</span>
+            <template v-if="s.page">
+              <span class="text-muted/40">·</span>
+              <span class="text-muted/70">p.{{ s.page }}</span>
+            </template>
           </template>
         </li>
       </ul>
