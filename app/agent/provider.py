@@ -32,7 +32,7 @@ class ChatProvider(Protocol):
 
 class OpenAIProvider:
     def __init__(self, api_key: str | None, model: str, client: OpenAI | None = None) -> None:
-        self._client = client or OpenAI(api_key=api_key)
+        self._client = client or OpenAI(api_key=api_key, timeout=120.0, max_retries=2)
         self._model = model
 
     def stream_turn(

@@ -106,7 +106,10 @@ def execute_get_diagnostic_reports(diag_repo, vehicle_id: int, query: str | None
         date = r.ended_utc.date().isoformat() if r.ended_utc else r.started_utc.date().isoformat()
         sources.append({"kind": "diagnostic", "session_id": r.id, "date": date,
                         "overall_status": r.overall_status or "unknown"})
-        report = json.loads(r.report_json) if r.report_json else {"findings": []}
+        try:
+            report = json.loads(r.report_json) if r.report_json else {"findings": []}
+        except (ValueError, TypeError):
+            report = {"findings": []}  # one corrupt report row must not break the tool
         header = f"Health check {date} — overall {r.overall_status or 'unknown'}"
         if r.summary:
             header += f": {r.summary}"

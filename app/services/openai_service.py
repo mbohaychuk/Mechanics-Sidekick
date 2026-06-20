@@ -9,7 +9,7 @@ class OpenAIService:
     """
 
     def __init__(self, api_key: str, client: OpenAI | None = None) -> None:
-        self._client = client or OpenAI(api_key=api_key)
+        self._client = client or OpenAI(api_key=api_key, timeout=60.0, max_retries=2)
 
     def embed(self, texts: list[str], model: str) -> list[list[float]]:
         response = self._client.embeddings.create(model=model, input=texts)

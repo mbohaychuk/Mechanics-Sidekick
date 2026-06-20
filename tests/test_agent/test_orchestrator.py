@@ -134,6 +134,42 @@ def test_missing_vehicle(db_session):
     assert history == []
 
 
+def test_tool_failure_degrades_and_loop_continues(db_session):
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
+    provider = FakeProvider([
+        ProviderTurn(text="", tool_calls=[ToolCall(id="c1", name="search_manuals", arguments={"query": "x"})]),
+        ProviderTurn(text="Here is my answer.", tool_calls=[]),
+    ])
+    orch = _orchestrator(db_session, provider)
+    orch._retrieval.retrieve.side_effect = RuntimeError("boom")  # the tool blows up
+
+    events = list(orch.run(job_id=job_id, user_message="q"))
+
+    assert "tool_result" in [e["type"] for e in events]   # tool ran and soft-failed
+    assert events[-1]["type"] == "done"                    # the turn still completed
+    history = ChatRepository(db_session).list_by_job(job_id)
+    assert any(m.role == "assistant" and "answer" in m.content.lower() for m in history)
+
+
+class _ExplodingProvider:
+    def stream_turn(self, messages, tools):
+        raise RuntimeError("network down")
+        yield  # unreachable — marks this as a generator
+
+
+def test_provider_failure_persists_assistant_turn(db_session):
+    _seed(db_session)
+    job_id = db_session.query(Job).first().id
+    orch = _orchestrator(db_session, _ExplodingProvider())
+
+    events = list(orch.run(job_id=job_id, user_message="q"))
+
+    assert any(e["type"] == "error" and "provider_error" in e["detail"] for e in events)
+    roles = [m.role for m in ChatRepository(db_session).list_by_job(job_id)]
+    assert roles == ["user", "assistant"]  # no silent half-written conversation
+
+
 class CapturingProvider:
     """Like FakeProvider, but records the tool names advertised on each turn."""
 
