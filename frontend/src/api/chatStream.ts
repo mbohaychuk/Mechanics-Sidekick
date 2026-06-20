@@ -1,3 +1,5 @@
+import { consumeSseStream } from '@/api/sse'
+
 export type ChatStreamEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call'; name: string; arguments: Record<string, unknown> }
@@ -21,34 +23,5 @@ export async function streamChatMessage(
   if (!response.ok || !response.body) {
     throw new Error(`Chat request failed: ${response.status}`)
   }
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  const flush = () => {
-    let index: number
-    while ((index = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, index)
-      buffer = buffer.slice(index + 2)
-      const line = frame.split('\n').find((l) => l.startsWith('data:'))
-      if (!line) continue
-      const payload = line.slice('data:'.length).trim()
-      if (!payload) continue
-      try {
-        onEvent(JSON.parse(payload) as ChatStreamEvent)
-      } catch {
-        /* ignore an unparseable frame */
-      }
-    }
-  }
-
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    flush()
-  }
-  buffer += decoder.decode()
-  flush()
+  await consumeSseStream<ChatStreamEvent>(response.body, onEvent)
 }
