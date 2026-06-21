@@ -232,8 +232,9 @@ def _build_orchestrator(session):
         )
 
 
-def _run_chat_turn(orchestrator, job_id: int, question: str) -> None:
-    """Drive one agent turn, streaming tokens, tool activity, and citations to the terminal."""
+def _run_chat_turn(orchestrator, job_id: int, question: str) -> bool:
+    """Drive one agent turn, streaming tokens, tool activity, and citations to the terminal.
+    Returns True if the turn ended in an error (so callers can set a non-zero exit code)."""
     sources: list[dict] = []
     errored = False
     for event in orchestrator.run(job_id, question):
@@ -257,6 +258,7 @@ def _run_chat_turn(orchestrator, job_id: int, question: str) -> None:
             else:
                 page = f", page {src['page']}" if src.get("page") else ""
                 console.print(f"  {i}. {src.get('filename', 'source')}{page}")
+    return errored
 
 
 # ── Chat commands ─────────────────────────────────────────────────────────────
@@ -268,10 +270,15 @@ def chat_ask(job_id: int, question: str):
     with get_session() as session:
         try:
             orchestrator = _build_orchestrator(session)
+            errored = _run_chat_turn(orchestrator, job_id, question)
         except ValueError as e:
             print_error(str(e))
             raise typer.Exit(1)
-        _run_chat_turn(orchestrator, job_id, question)
+        except Exception as e:  # unexpected (DB lock, programming error) — non-zero, no raw traceback
+            print_error(f"Error: {e}")
+            raise typer.Exit(1)
+        if errored:
+            raise typer.Exit(1)  # agent/provider error → fail the command for scriptability
 
 
 @chat_app.command("start")
@@ -307,11 +314,14 @@ def chat_start(job_id: int):
         with get_session() as session:
             try:
                 orchestrator = _build_orchestrator(session)
+                console.print("[bold]Assistant:[/bold]")
+                _run_chat_turn(orchestrator, job_id, question)
             except ValueError as e:
                 print_error(str(e))
-                break
-            console.print("[bold]Assistant:[/bold]")
-            _run_chat_turn(orchestrator, job_id, question)
+                break  # config error (e.g. no API key) won't fix itself mid-session
+            except Exception as e:  # one bad turn must not kill the whole interactive session
+                print_error(f"Error: {e}")
+                continue
 
 
 # --- DB maintenance commands ------------------------------------------------

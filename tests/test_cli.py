@@ -71,3 +71,20 @@ def test_cli_chat_ask_no_key_shows_actionable_message(tmp_path, monkeypatch):
 
     assert result.exit_code == 1
     assert "OPENAI_API_KEY" in result.output
+
+
+def test_cli_chat_ask_exits_nonzero_on_agent_error(tmp_path, monkeypatch):
+    # An agent/provider error (emitted as an event, not an exception) must FAIL the command
+    # so it's scriptable — not exit 0 with the error merely printed.
+    _temp_db_with_job(tmp_path, monkeypatch)
+
+    def erroring(session, settings, obd_host=None):
+        orch = _fake_orchestrator(session, settings)
+        orch.run = lambda *a, **k: iter([
+            {"type": "error", "detail": "max_iterations_reached"}, {"type": "done"},
+        ])
+        return orch
+
+    monkeypatch.setattr("app.services.factories.make_chat_orchestrator", erroring)
+    result = runner.invoke(cli.app, ["chat", "ask", "1", "q"])
+    assert result.exit_code == 1
