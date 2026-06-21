@@ -4,7 +4,7 @@ from pathlib import Path
 import typer
 
 from app.config import settings
-from app.db import Base, ensure_runtime_columns, get_engine, get_session_factory
+from app.db import Base, ensure_fts, ensure_runtime_columns, get_engine, get_session_factory
 from app.utils.console import console, print_error, print_success, print_vehicle, print_job
 
 app = typer.Typer(name="mechanic-sidekick", help="Local RAG assistant for mechanics.")
@@ -34,6 +34,7 @@ def _get_engine():
         _engine = get_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(_engine)
         ensure_runtime_columns(_engine)  # additive migration for older on-disk DBs
+        ensure_fts(_engine)              # create + backfill the FTS5 index for hybrid search
         _Session = get_session_factory(_engine)
     return _engine
 

@@ -59,3 +59,28 @@ def test_rank_chunks_skips_null_embeddings():
     results = rank_chunks(query_vec=[1.0, 0.0], chunks=[chunk_a, chunk_b], top_k=5)
     assert len(results) == 1
     assert results[0][0] is chunk_a
+
+
+# ── Reciprocal Rank Fusion (hybrid BM25 + cosine) ──────────────────────────────
+from types import SimpleNamespace
+from app.rag.similarity import rank_fusion
+
+
+def _c(cid):
+    return SimpleNamespace(id=cid, content=f"chunk {cid}")
+
+
+def test_rank_fusion_reorders_by_fused_score_and_keeps_cosine():
+    a, b, c = _c(1), _c(2), _c(3)
+    cosine_scored = [(a, 0.9), (b, 0.8), (c, 0.1)]   # cosine ranks: a, b, c
+    bm25_ids = [3, 1]                                 # BM25 ranks: c, a (b absent)
+    # RRF(k=60): a=1/61+1/62 > c=1/63+1/61 > b=1/62  -> [a, c, b]
+    fused = rank_fusion(cosine_scored, bm25_ids, k=60)
+    assert [chunk.id for chunk, _ in fused] == [1, 3, 2]
+    assert [score for _, score in fused] == [0.9, 0.1, 0.8]  # each chunk keeps its cosine
+
+
+def test_rank_fusion_pure_cosine_when_bm25_empty():
+    a, b = _c(1), _c(2)
+    cosine_scored = [(a, 0.9), (b, 0.2)]
+    assert rank_fusion(cosine_scored, [], k=60) == [(a, 0.9), (b, 0.2)]

@@ -215,6 +215,11 @@ data/documents/*
 audit/
 .playwright-mcp/
 
+# Local eval fixtures — large source manuals / research, never commit
+Ford_F-150_2015-2017.pdf
+2015-f150-5.0L-sources.html
+*.pdf
+
 # Frontend
 frontend/node_modules/
 frontend/dist/

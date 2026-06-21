@@ -42,3 +42,8 @@ dev = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
 ]
+# Optional: local cross-encoder reranker (RERANK_PROVIDER=local). Not in the base install —
+# pulls onnxruntime; enable with `uv sync --group rerank`.
+rerank = [
+    "flashrank>=0.2",
+]

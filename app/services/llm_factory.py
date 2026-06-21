@@ -3,6 +3,7 @@ from app.services.contextualization_service import ContextualizationService
 from app.services.embedding_service import EmbeddingService
 from app.services.ollama_service import OllamaService
 from app.services.openai_service import OpenAIService
+from app.services.reranker import FlashRankReranker, NoOpReranker, Reranker
 
 
 def make_embedding_service(settings: Settings) -> EmbeddingService:
@@ -27,3 +28,9 @@ def make_contextualization_service(settings: Settings) -> ContextualizationServi
         OllamaService(settings.ollama_base_url),
         settings.context_model,
     )
+
+
+def make_reranker(settings: Settings) -> Reranker:
+    if settings.rerank_provider == "local":
+        return FlashRankReranker(settings.rerank_model)  # flashrank imported lazily inside __init__
+    return NoOpReranker()

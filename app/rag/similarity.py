@@ -26,3 +26,20 @@ def rank_chunks(query_vec: list[float], chunks: list, top_k: int) -> list[tuple]
     ]
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:top_k]
+
+
+def rank_fusion(cosine_scored: list[tuple], bm25_ids: list[int], k: int = 60) -> list[tuple]:
+    """Fuse a cosine-ranked list of (chunk, cosine) with a BM25-ranked list of chunk ids by
+    Reciprocal Rank Fusion (RRF). Returns the SAME (chunk, cosine) tuples reordered by fused
+    score — the cosine rides along so the (chunk, score) contract is preserved. A chunk absent
+    from the BM25 list simply gets no BM25 term. Stable: ties keep the cosine order."""
+    bm25_rank = {cid: rank for rank, cid in enumerate(bm25_ids)}
+    fused = []
+    for cosine_rank, (chunk, cosine) in enumerate(cosine_scored):
+        score = 1.0 / (k + cosine_rank + 1)
+        bm25 = bm25_rank.get(chunk.id)
+        if bm25 is not None:
+            score += 1.0 / (k + bm25 + 1)
+        fused.append((chunk, cosine, score))
+    fused.sort(key=lambda item: item[2], reverse=True)
+    return [(chunk, cosine) for chunk, cosine, _ in fused]

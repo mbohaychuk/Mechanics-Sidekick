@@ -19,6 +19,7 @@ from app.services.document_service import DocumentService
 from app.services.llm_factory import (
     make_contextualization_service,
     make_embedding_service,
+    make_reranker,
 )
 from app.services.pdf_service import PDFService
 from app.services.retrieval_service import RetrievalService
@@ -49,6 +50,10 @@ def make_chat_orchestrator(
         ChunkRepository(session),
         make_embedding_service(settings),
         settings.top_k_chunks,
+        make_reranker(settings),
+        settings.rerank_candidates,
+        settings.hybrid_search,
+        settings.rrf_k,
     )
     provider = OpenAIProvider(
         api_key=settings.openai_api_key or None,
@@ -95,9 +100,13 @@ def make_diagnostic_runner(session_factory, settings: Settings, manager, host, v
         web_client = TavilyClient(api_key=settings.tavily_api_key)
 
     embedding = make_embedding_service(settings)
+    reranker = make_reranker(settings)  # build once; reused across sessions to avoid reloading the model
 
     def diagnoser_factory(session):
-        retrieval = RetrievalService(ChunkRepository(session), embedding, settings.top_k_chunks)
+        retrieval = RetrievalService(
+            ChunkRepository(session), embedding, settings.top_k_chunks, reranker,
+            settings.rerank_candidates, settings.hybrid_search, settings.rrf_k,
+        )
         return Diagnoser(retrieval, DocumentRepository(session), web_client, vehicle_id, settings)
 
     return DiagnosticSessionRunner(
