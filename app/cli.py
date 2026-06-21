@@ -5,7 +5,7 @@ import typer
 
 from app.config import settings
 from app.db import Base, ensure_runtime_columns, get_engine, get_session_factory
-from app.utils.console import console, print_error, print_success, print_vehicle, print_job, print_answer
+from app.utils.console import console, print_error, print_success, print_vehicle, print_job
 
 app = typer.Typer(name="mechanic-sidekick", help="Local RAG assistant for mechanics.")
 vehicle_app = typer.Typer(help="Manage vehicles.")
@@ -219,58 +219,67 @@ def document_list(vehicle_id: int):
             console.print(f"  [{d.id}] {d.file_name} — {d.document_type} — {d.processing_status}")
 
 
-def _make_chat_service(session):
-    from app.repositories.vehicle_repository import VehicleRepository
-    from app.repositories.document_repository import DocumentRepository
-    from app.repositories.job_repository import JobRepository
-    from app.repositories.chat_repository import ChatRepository
-    from app.repositories.chunk_repository import ChunkRepository
-    from app.services.ollama_service import OllamaService
-    from app.services.llm_factory import make_embedding_service
-    from app.services.retrieval_service import RetrievalService
-    from app.services.chat_service import ChatService
+def _build_orchestrator(session):
+    """Build the SAME agentic orchestrator the web app uses (manuals + web + past reports),
+    so the CLI and the browser share one chat implementation. The agent uses OpenAI."""
+    from app.services.factories import make_chat_orchestrator
 
-    ollama_svc = OllamaService(settings.ollama_base_url)
-    # Embed queries with the SAME provider used for ingestion (settings.embed_provider),
-    # not a hardcoded Ollama model — otherwise query and corpus vectors don't match.
     try:
-        embedding_svc = make_embedding_service(settings)
-    except Exception as exc:  # e.g. OpenAI client with no API key
+        return make_chat_orchestrator(session, settings)
+    except Exception as exc:  # e.g. OpenAI client constructed with no API key
         raise ValueError(
-            "Embedding provider unavailable — set OPENAI_API_KEY in .env, or set "
-            f"EMBED_PROVIDER=ollama for a fully-local setup. ({exc})"
+            "Chat unavailable — the assistant uses OpenAI; set OPENAI_API_KEY in .env. "
+            f"({exc})"
         )
-    retrieval_svc = RetrievalService(ChunkRepository(session), embedding_svc, settings.top_k_chunks)
 
-    return ChatService(
-        chat_repo=ChatRepository(session),
-        job_repo=JobRepository(session),
-        vehicle_repo=VehicleRepository(session),
-        doc_repo=DocumentRepository(session),
-        retrieval_service=retrieval_svc,
-        ollama_service=ollama_svc,
-        chat_model=settings.chat_model,
-        recent_messages_limit=settings.recent_messages,
-    )
+
+def _run_chat_turn(orchestrator, job_id: int, question: str) -> bool:
+    """Drive one agent turn, streaming tokens, tool activity, and citations to the terminal.
+    Returns True if the turn ended in an error (so callers can set a non-zero exit code)."""
+    sources: list[dict] = []
+    errored = False
+    for event in orchestrator.run(job_id, question):
+        etype = event["type"]
+        if etype == "token":
+            print(event["text"], end="", flush=True)
+        elif etype == "tool_call":
+            console.print(f"\n[dim]· {event['name']}…[/dim]")
+        elif etype == "sources":
+            sources = event["sources"]
+        elif etype == "error":
+            print()
+            print_error(event["detail"])
+            errored = True
+    print()
+    if sources and not errored:
+        console.print("[bold dim]Sources:[/bold dim]")
+        for i, src in enumerate(sources, start=1):
+            if src.get("kind") == "diagnostic":
+                console.print(f"  {i}. Health report {src.get('date', '')} ({src.get('overall_status', '')})")
+            else:
+                page = f", page {src['page']}" if src.get("page") else ""
+                console.print(f"  {i}. {src.get('filename', 'source')}{page}")
+    return errored
 
 
 # ── Chat commands ─────────────────────────────────────────────────────────────
 
 @chat_app.command("ask")
 def chat_ask(job_id: int, question: str):
-    """Ask a single question in a job context."""
+    """Ask one question in a job context — the agent searches the manuals, the web, and past
+    diagnostic reports, and streams the answer."""
     with get_session() as session:
         try:
-            svc = _make_chat_service(session)
-            with console.status("Thinking...", spinner="dots"):
-                answer, sources = svc.ask(job_id=job_id, question=question)
+            orchestrator = _build_orchestrator(session)
+            errored = _run_chat_turn(orchestrator, job_id, question)
         except ValueError as e:
             print_error(str(e))
             raise typer.Exit(1)
-        except Exception as e:
+        except Exception as e:  # unexpected (DB lock, programming error) — non-zero, no raw traceback
             print_error(f"Error: {e}")
             raise typer.Exit(1)
-        print_answer(answer, sources)
+        if errored:
+            raise typer.Exit(1)  # agent/provider error → fail the command for scriptability
 
 
 @chat_app.command("start")
@@ -305,13 +314,15 @@ def chat_start(job_id: int):
 
         with get_session() as session:
             try:
-                svc = _make_chat_service(session)
-                with console.status("Thinking...", spinner="dots"):
-                    answer, sources = svc.ask(job_id=job_id, question=question)
-            except Exception as e:
+                orchestrator = _build_orchestrator(session)
+                console.print("[bold]Assistant:[/bold]")
+                _run_chat_turn(orchestrator, job_id, question)
+            except ValueError as e:
+                print_error(str(e))
+                break  # config error (e.g. no API key) won't fix itself mid-session
+            except Exception as e:  # one bad turn must not kill the whole interactive session
                 print_error(f"Error: {e}")
                 continue
-            print_answer(answer, sources)
 
 
 # --- DB maintenance commands ------------------------------------------------
