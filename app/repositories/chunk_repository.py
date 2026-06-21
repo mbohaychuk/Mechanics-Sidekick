@@ -10,12 +10,21 @@ from app.models.document_chunk import DocumentChunk
 
 _TOKEN_RE = re.compile(r"[\w./-]+")
 
+# Function words carry no retrieval signal but, OR'd into the MATCH, flood BM25 with common-word
+# matches that drown the discriminative token (a query for "P0420" otherwise loses to chunks full
+# of "what/does/code"). Dropping them is what makes hybrid help instead of hurt exact-token recall.
+_STOPWORDS = frozenset({
+    "a", "an", "the", "of", "for", "to", "in", "on", "at", "and", "or", "with", "from", "into", "by",
+    "is", "are", "was", "were", "be", "been", "do", "does", "did", "can", "should", "would", "will",
+    "what", "which", "how", "where", "when", "why", "who", "whose",
+    "you", "your", "i", "we", "my", "me", "it", "its", "this", "that", "these", "those", "as", "than",
+})
+
 
 def _to_match_query(question: str) -> str:
-    """Build an FTS5 MATCH string: each query token phrase-quoted and OR-joined. Phrase quotes
-    are mandatory — a raw `MATCH 'M12x1.5'` / `'lb-ft'` throws a syntax error; quoting also lets
-    BM25 rank by term overlap so rare tokens (DTC codes, part numbers) dominate the score."""
-    tokens = _TOKEN_RE.findall(question)
+    """Build an FTS5 MATCH string: content tokens phrase-quoted and OR-joined, stopwords dropped.
+    Phrase quotes are mandatory — a raw `MATCH 'M12x1.5'` / `'lb-ft'` throws a syntax error."""
+    tokens = [t for t in _TOKEN_RE.findall(question) if t.lower() not in _STOPWORDS]
     return " OR ".join(f'"{t}"' for t in tokens) if tokens else ""
 
 

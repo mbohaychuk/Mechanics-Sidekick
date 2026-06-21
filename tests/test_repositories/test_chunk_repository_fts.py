@@ -1,9 +1,23 @@
 import json
 
 from app.models.document_chunk import DocumentChunk
-from app.repositories.chunk_repository import ChunkRepository
+from app.repositories.chunk_repository import ChunkRepository, _to_match_query
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.vehicle_repository import VehicleRepository
+
+
+def test_match_query_drops_stopwords_keeps_discriminative_tokens():
+    # Stopwords flood BM25 with common-word matches and drown the rare token (verified regression);
+    # the MATCH query must keep the content tokens and drop the function words.
+    q = _to_match_query("What does diagnostic trouble code P0420 indicate?").lower()
+    assert '"p0420"' in q
+    assert '"diagnostic"' in q
+    assert '"what"' not in q
+    assert '"does"' not in q
+
+
+def test_match_query_empty_when_only_stopwords():
+    assert _to_match_query("what is the") == ""
 
 
 def _vehicle(db_session, make):
