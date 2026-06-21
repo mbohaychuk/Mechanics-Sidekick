@@ -52,6 +52,8 @@ def make_chat_orchestrator(
         settings.top_k_chunks,
         make_reranker(settings),
         settings.rerank_candidates,
+        settings.hybrid_search,
+        settings.rrf_k,
     )
     provider = OpenAIProvider(
         api_key=settings.openai_api_key or None,
@@ -102,7 +104,8 @@ def make_diagnostic_runner(session_factory, settings: Settings, manager, host, v
 
     def diagnoser_factory(session):
         retrieval = RetrievalService(
-            ChunkRepository(session), embedding, settings.top_k_chunks, reranker, settings.rerank_candidates
+            ChunkRepository(session), embedding, settings.top_k_chunks, reranker,
+            settings.rerank_candidates, settings.hybrid_search, settings.rrf_k,
         )
         return Diagnoser(retrieval, DocumentRepository(session), web_client, vehicle_id, settings)
 

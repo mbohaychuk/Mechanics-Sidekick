@@ -109,3 +109,17 @@ def test_retrieve_expands_pool_beyond_top_k_then_slices(db_session, vehicle_with
 
     assert len(reranker.received) == 2  # reranker saw the expanded pool, not just top_k=1
     assert len(results) == 1            # final result sliced back to top_k
+
+
+def test_retrieve_hybrid_promotes_bm25_match_over_cosine(db_session, vehicle_with_chunks):
+    vehicle = vehicle_with_chunks
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    mock_embedding.embed_query.return_value = [1.0, 0.0, 0.0]  # cosine favors the Torque chunk
+
+    svc = RetrievalService(ChunkRepository(db_session), mock_embedding, top_k=2,
+                           hybrid_search=True, rerank_candidates=40)
+    # keyword query matches the rotor chunk in FTS -> RRF lifts it above the cosine-favored one
+    results = svc.retrieve(vehicle_id=vehicle.id, question="minimum rotor thickness 20mm")
+
+    assert [c.content for c, _ in results] == ["Minimum rotor thickness 20mm", "Torque spec 129 Nm"]
+    assert [s for _, s in results] == [pytest.approx(0.0), pytest.approx(1.0)]  # cosines preserved

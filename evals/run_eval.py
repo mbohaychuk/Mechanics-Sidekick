@@ -28,19 +28,21 @@ def main() -> None:
     parser.add_argument("--label", default="baseline", help="report label (e.g. baseline, 1A-rerank)")
     parser.add_argument("--rerank-provider", default=settings.rerank_provider, help="none | local")
     parser.add_argument("--rerank-candidates", type=int, default=settings.rerank_candidates)
+    parser.add_argument("--hybrid", action="store_true", help="fuse BM25 (FTS5) with cosine via RRF")
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
 
-    settings.rerank_provider = args.rerank_provider  # let the CLI flag drive the seam for an A/B run
+    settings.rerank_provider = args.rerank_provider  # let the CLI flags drive the seams for an A/B run
     questions = load_golden(args.golden)
     embedding = make_embedding_service(settings)
     reranker = make_reranker(settings)
     with get_session() as session:
-        retrieval = RetrievalService(ChunkRepository(session), embedding, args.k, reranker, args.rerank_candidates)
+        retrieval = RetrievalService(ChunkRepository(session), embedding, args.k, reranker,
+                                     args.rerank_candidates, args.hybrid, settings.rrf_k)
         report = run_eval(retrieval, args.vehicle_id, questions, args.k)
 
     report.update({"label": args.label, "k": args.k, "vehicle_id": args.vehicle_id,
-                   "rerank_provider": args.rerank_provider})
+                   "rerank_provider": args.rerank_provider, "hybrid": args.hybrid})
     s = report["summary"]
     print(f"[{args.label}] n={s['n']}  hit@1={s['hit_rate_at_1']:.3f}  "
           f"hit@{args.k}={s['hit_rate']:.3f}  MRR={s['mrr']:.3f}")
