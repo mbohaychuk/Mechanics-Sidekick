@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     docs_dir: str = "./data/documents"
     chunk_size: int = 500
     chunk_overlap: int = 100
+    embed_batch_size: int = 128          # texts per embedding API call (token/array-limit safe)
+    ingest_concurrency: int = 8          # concurrent context-summary LLM calls during ingestion
+    contextualize_max_chunks: int = 1500  # above this, skip per-chunk LLM context (embed raw + metadata) to keep huge manuals fast/cheap
     top_k_chunks: int = 5
     recent_messages: int = 6
     max_agent_iters: int = 6
@@ -22,7 +25,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     cors_origin: str = "http://localhost:5173"
     spa_dist_dir: str = "frontend/dist"
-    max_upload_bytes: int = 100 * 1024 * 1024
+    max_upload_bytes: int = 600 * 1024 * 1024
     obd_mcp_enabled: bool = False
     obd_mcp_dir: str = ""
     obd_port: str = "socket://localhost:35000"

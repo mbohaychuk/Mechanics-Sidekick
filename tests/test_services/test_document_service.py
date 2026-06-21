@@ -36,13 +36,13 @@ def sample_pdf(tmp_path) -> Path:
     return path
 
 
-def _make_svc(db_session, docs_dir, mock_embedding, mock_contextualization=None):
+def _make_svc(db_session, docs_dir, mock_embedding, mock_contextualization=None, chunks=None, **kwargs):
     if mock_contextualization is None:
         mock_contextualization = MagicMock(spec=ContextualizationService)
         mock_contextualization.generate_context.return_value = "Test context summary."
 
     mock_chunking = MagicMock(spec=StructuredChunkingService)
-    mock_chunking.chunk_blocks.return_value = [
+    mock_chunking.chunk_blocks.return_value = chunks if chunks is not None else [
         {"chunk_index": 0, "page_number": 1, "section_title": "TEST SECTION", "content": "Torque spec is 129 Nm"}
     ]
 
@@ -54,6 +54,7 @@ def _make_svc(db_session, docs_dir, mock_embedding, mock_contextualization=None)
         contextualization_service=mock_contextualization,
         embedding_service=mock_embedding,
         docs_dir=docs_dir,
+        **kwargs,
     )
 
 
@@ -75,6 +76,31 @@ def test_add_document_creates_record_copies_file_and_stores_chunks(db_session, v
     chunks = ChunkRepository(db_session).list_by_vehicle(vehicle.id)
     assert len(chunks) >= 1
     assert json.loads(chunks[0].embedding_json) == [0.1, 0.2, 0.3]
+
+
+def test_large_doc_skips_contextualization_batches_embeddings_and_tracks_progress(
+    db_session, vehicle, sample_pdf, tmp_path
+):
+    # 5 chunks, batch size 2, contextualize cap 3 -> skip per-chunk LLM context, embed in 3 batches.
+    chunks = [
+        {"chunk_index": i, "page_number": i + 1, "section_title": "S", "content": f"chunk {i}"}
+        for i in range(5)
+    ]
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    mock_embedding.embed_texts.side_effect = lambda texts: [[0.1, 0.2] for _ in texts]
+    mock_ctx = MagicMock(spec=ContextualizationService)
+
+    svc = _make_svc(db_session, str(tmp_path / "docs"), mock_embedding, mock_ctx,
+                    chunks=chunks, embed_batch_size=2, contextualize_max_chunks=3)
+
+    doc = svc.add_document(vehicle_id=vehicle.id, pdf_path=str(sample_pdf))
+    db_session.flush()
+
+    assert doc.processing_status == "ready"
+    assert doc.chunks_total == 5 and doc.chunks_done == 5
+    mock_ctx.generate_context.assert_not_called()           # skipped above the cap
+    assert mock_embedding.embed_texts.call_count == 3        # ceil(5/2) batches
+    assert len(ChunkRepository(db_session).list_by_vehicle(vehicle.id)) == 5
 
 
 def test_add_document_with_no_extractable_text_is_marked_no_text(db_session, vehicle, sample_pdf, tmp_path):
@@ -109,3 +135,35 @@ def test_add_document_marks_failed_on_embedding_error(db_session, vehicle, sampl
     docs = DocumentRepository(db_session).list_by_vehicle(vehicle.id)
     assert len(docs) == 1
     assert docs[0].processing_status == "failed"
+
+
+def test_failed_ingest_midway_cleans_up_partial_chunks(db_session, vehicle, sample_pdf, tmp_path):
+    # 4 chunks, batch size 2: batch 1 embeds OK (2 chunks committed), batch 2 raises.
+    # The failed document must NOT leave its first batch's chunks orphaned.
+    chunks = [
+        {"chunk_index": i, "page_number": 1, "section_title": "S", "content": f"c{i}"}
+        for i in range(4)
+    ]
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    calls = {"n": 0}
+
+    def embed(texts):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return [[0.1, 0.2] for _ in texts]
+        raise RuntimeError("embedding backend down")
+
+    mock_embedding.embed_texts.side_effect = embed
+    svc = _make_svc(db_session, str(tmp_path / "docs"), mock_embedding,
+                    chunks=chunks, embed_batch_size=2, contextualize_max_chunks=99)
+
+    with pytest.raises(RuntimeError, match="Document processing failed"):
+        svc.add_document(vehicle_id=vehicle.id, pdf_path=str(sample_pdf))
+
+    doc = DocumentRepository(db_session).list_by_vehicle(vehicle.id)[0]
+    assert doc.processing_status == "failed"
+    assert doc.chunks_done is None and doc.chunks_total is None        # progress reset
+    assert ChunkRepository(db_session).list_by_vehicle(vehicle.id) == []  # no orphans (note: filtered to ready)
+    # also assert nothing is left at the table level, not just the ready-filtered view
+    from app.models.document_chunk import DocumentChunk
+    assert db_session.query(DocumentChunk).filter_by(document_id=doc.id).count() == 0

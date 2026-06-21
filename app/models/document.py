@@ -17,3 +17,5 @@ class Document(Base):
         default=lambda: datetime.now(timezone.utc)
     )
     processing_status: Mapped[str] = mapped_column(String(50), default="pending")
+    chunks_total: Mapped[int | None] = mapped_column(default=None)
+    chunks_done: Mapped[int | None] = mapped_column(default=None)
