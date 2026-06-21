@@ -147,6 +147,9 @@ Defaults work out of the box once `OPENAI_API_KEY` is set. Override anything via
 | `TAVILY_API_KEY` | — | Tavily key for web search |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `500` / `100` | Words per chunk / overlap |
 | `TOP_K_CHUNKS` | `5` | Chunks retrieved per `search_manuals` call |
+| `RERANK_PROVIDER` | `none` | Cross-encoder reranker over the dense top‑N (`local` = FlashRank; needs `uv sync --group rerank`) |
+| `RERANK_CANDIDATES` | `40` | Dense pool reranked, then truncated to `TOP_K_CHUNKS` |
+| `HYBRID_SEARCH` | `false` | Fuse BM25 (SQLite FTS5) keyword ranks with cosine via Reciprocal Rank Fusion |
 | `RECENT_MESSAGES` | `6` | Chat history window sent to the LLM |
 | `API_HOST` / `API_PORT` | `127.0.0.1` / `8000` | Backend bind address |
 | `CORS_ORIGIN` | `http://localhost:5173` | Allowed dev origin |
@@ -180,6 +183,20 @@ sequence for the 4.2L V8 engine during reassembly.
 ```
 
 The original chunk text is stored separately for citation display; the *enriched* version is what gets embedded. As a result, 4.2L and 6.0L content now point in meaningfully different directions in vector space, and retrieval precision improves with no change to the ranking logic. The tradeoff is ingestion time — one LLM call per chunk.
+
+---
+
+## Measuring retrieval — an eval harness, not a hunch
+
+Retrieval changes are easy to *assert* and hard to *prove*. `evals/` is a small, dependency‑light harness that scores retrieval through the real `RetrievalService.retrieve()` against a set of **labeled questions whose answer pages are verified against the actual manual** (DTC codes, torque/spec values, repair procedures), reporting **hit@1 / hit@5 / MRR** per question type. It captures a dense‑only **baseline** so every change is judged on a measured delta — `uv run python -m evals.run_eval --vehicle-id N --label baseline`. Full method + results: [`evals/README.md`](evals/README.md).
+
+Running it on a real **264 MB / 13k‑page Ford F‑150 manual** (~11k chunks) was clarifying, and overturned an assumption:
+
+- **Dense retrieval already finds exact tokens.** It lands a relevant chunk in the top‑5 for *every* literal‑code query — so the headroom was **ranking** (hit@1 was only 0.40), not exact‑token recall.
+- **A cross‑encoder reranker** (`RERANK_PROVIDER=local`) over the dense top‑40 lifts **hit@5 0.84 → 0.96** and recovers chunks dense missed entirely.
+- **BM25 hybrid** (`HYBRID_SEARCH=true`, SQLite FTS5 + Reciprocal Rank Fusion) gives the best **hit@1 (0.56)** — *after* the harness caught a real bug: OR‑ing stopwords into the FTS query flooded BM25 with common‑word matches and pushed the right DTC chunk out of the candidate pool. The FTS tokenizer also preserves `.`, `-`, `/` so `P0420` / `M12x1.5` index as whole tokens.
+
+Both are **off by default** and opt‑in; the harness is what decides whether each earns being enabled.
 
 ---
 
