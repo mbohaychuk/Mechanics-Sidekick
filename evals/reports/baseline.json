@@ -1,0 +1,208 @@
+{
+  "summary": {
+    "n": 25,
+    "mrr": 0.5813333333333334,
+    "hit_rate": 0.84,
+    "hit_rate_at_1": 0.4,
+    "by_type": {
+      "exact_token": {
+        "n": 5,
+        "mrr": 0.7333333333333333,
+        "hit_rate": 1.0,
+        "hit_rate_at_1": 0.6
+      },
+      "conceptual": {
+        "n": 12,
+        "mrr": 0.5305555555555556,
+        "hit_rate": 0.8333333333333334,
+        "hit_rate_at_1": 0.3333333333333333
+      },
+      "paraphrase": {
+        "n": 8,
+        "mrr": 0.5625,
+        "hit_rate": 0.75,
+        "hit_rate_at_1": 0.375
+      }
+    }
+  },
+  "per_question": [
+    {
+      "id": "p0420",
+      "type": "exact_token",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "p0300",
+      "type": "exact_token",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "p0171",
+      "type": "exact_token",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.3333333333333333
+    },
+    {
+      "id": "p0174",
+      "type": "exact_token",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.3333333333333333
+    },
+    {
+      "id": "spark_plug_part",
+      "type": "exact_token",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "spark_plug_gap",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.5
+    },
+    {
+      "id": "firing_order",
+      "type": "conceptual",
+      "hit": false,
+      "hit1": false,
+      "reciprocal_rank": 0.0
+    },
+    {
+      "id": "oil_pressure_idle",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "compression_ratio",
+      "type": "conceptual",
+      "hit": false,
+      "hit1": false,
+      "reciprocal_rank": 0.0
+    },
+    {
+      "id": "valve_stem_intake",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.5
+    },
+    {
+      "id": "valve_seat_angle",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "fuel_pressure",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.2
+    },
+    {
+      "id": "thermostat_removal",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.3333333333333333
+    },
+    {
+      "id": "cat_converter_removal",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "o2_sensor_removal",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.5
+    },
+    {
+      "id": "timing_chain",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.3333333333333333
+    },
+    {
+      "id": "brake_bleed",
+      "type": "conceptual",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "p0420_para",
+      "type": "paraphrase",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "p0300_para",
+      "type": "paraphrase",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.5
+    },
+    {
+      "id": "p0171_para",
+      "type": "paraphrase",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.5
+    },
+    {
+      "id": "p0174_para",
+      "type": "paraphrase",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    },
+    {
+      "id": "firing_order_para",
+      "type": "paraphrase",
+      "hit": false,
+      "hit1": false,
+      "reciprocal_rank": 0.0
+    },
+    {
+      "id": "compression_para",
+      "type": "paraphrase",
+      "hit": false,
+      "hit1": false,
+      "reciprocal_rank": 0.0
+    },
+    {
+      "id": "gap_para",
+      "type": "paraphrase",
+      "hit": true,
+      "hit1": false,
+      "reciprocal_rank": 0.5
+    },
+    {
+      "id": "oil_pressure_para",
+      "type": "paraphrase",
+      "hit": true,
+      "hit1": true,
+      "reciprocal_rank": 1.0
+    }
+  ],
+  "label": "baseline",
+  "k": 5,
+  "vehicle_id": 1
+}

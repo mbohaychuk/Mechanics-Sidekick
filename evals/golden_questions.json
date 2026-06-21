@@ -1,0 +1,28 @@
+[
+  {"id": "p0420", "question": "What does diagnostic trouble code P0420 indicate?", "type": "exact_token", "answer_contains": ["P0420"], "answer": "Catalyst System Efficiency Below Threshold (Bank 1)"},
+  {"id": "p0300", "question": "What does diagnostic trouble code P0300 indicate?", "type": "exact_token", "answer_contains": ["P0300"], "answer": "Random/Multiple Cylinder Misfire Detected"},
+  {"id": "p0171", "question": "What does diagnostic trouble code P0171 indicate?", "type": "exact_token", "answer_contains": ["P0171"], "answer": "System Too Lean (Bank 1)"},
+  {"id": "p0174", "question": "What does diagnostic trouble code P0174 indicate?", "type": "exact_token", "answer_contains": ["P0174"], "answer": "System Too Lean (Bank 2)"},
+  {"id": "spark_plug_part", "question": "What is the spark plug part number for the 5.0L engine?", "type": "exact_token", "answer_contains": ["12405"], "answer": "12405"},
+  {"id": "spark_plug_gap", "question": "What is the spark plug gap specification for the 5.0L engine?", "type": "conceptual", "answer_contains": ["1.25-1.35"], "answer": "1.25-1.35 mm (0.049-0.053 in)"},
+  {"id": "firing_order", "question": "What is the firing order for the 5.0L engine?", "type": "conceptual", "answer_contains": ["1-3-7-2-6-5-4-8"], "answer": "1-3-7-2-6-5-4-8"},
+  {"id": "oil_pressure_idle", "question": "What is the 5.0L oil pressure at idle at normal operating temperature?", "type": "conceptual", "answer_contains": ["10-15psi"], "answer": "10-15 psi (69-103 kPa)"},
+  {"id": "compression_ratio", "question": "What is the compression ratio of the 5.0L engine?", "type": "conceptual", "answer_contains": ["10.5:1"], "answer": "10.5:1"},
+  {"id": "valve_stem_intake", "question": "What is the intake valve stem diameter for the 5.0L?", "type": "conceptual", "answer_contains": ["0.2352-0.2360"], "answer": "0.2352-0.2360 in (5.975-5.995 mm)"},
+  {"id": "valve_seat_angle", "question": "What is the valve seat angle for the 5.0L cylinder head?", "type": "conceptual", "answer_contains": ["120/90/60"], "answer": "120/90/60 degrees"},
+  {"id": "fuel_pressure", "question": "What is the low-pressure-side fuel pressure specification?", "type": "conceptual", "answer_contains": ["350-600"], "answer": "51-87 psi (350-600 kPa)"},
+  {"id": "thermostat_removal", "question": "How do you remove the engine thermostat?", "type": "conceptual", "relevant_pages": [8963, 8964, 8965, 9025, 9026, 9027, 9028, 9030, 9031], "answer": "Thermostat removal procedure"},
+  {"id": "cat_converter_removal", "question": "How do you remove the catalytic converter?", "type": "conceptual", "relevant_pages": [9200, 9202, 9204, 9206, 9216, 9218, 9220, 9222, 9232, 9234, 9236, 9238], "answer": "Catalytic converter removal procedure"},
+  {"id": "o2_sensor_removal", "question": "How do you remove the heated oxygen sensor (HO2S)?", "type": "conceptual", "relevant_pages": [6938, 6939, 9681, 9682, 9732], "answer": "HO2S removal procedure"},
+  {"id": "timing_chain", "question": "What is the timing chain removal and installation procedure?", "type": "conceptual", "relevant_pages": [7102, 7113, 7120], "answer": "Timing chain R&R procedure"},
+  {"id": "brake_bleed", "question": "What is the brake system pressure bleeding procedure?", "type": "conceptual", "relevant_pages": [4359, 4363], "answer": "Brake system pressure bleeding"},
+
+  {"id": "p0420_para", "question": "Which fault code is set when the catalyst is not converting efficiently enough on bank 1?", "type": "paraphrase", "answer_contains": ["P0420"], "answer": "P0420"},
+  {"id": "p0300_para", "question": "What is the code for misfires happening across multiple cylinders at random?", "type": "paraphrase", "answer_contains": ["P0300"], "answer": "P0300"},
+  {"id": "p0171_para", "question": "Which trouble code points to a lean running condition on bank 1?", "type": "paraphrase", "answer_contains": ["P0171"], "answer": "P0171"},
+  {"id": "p0174_para", "question": "What code comes up for a lean fuel mixture on the bank 2 side?", "type": "paraphrase", "answer_contains": ["P0174"], "answer": "P0174"},
+  {"id": "firing_order_para", "question": "In what order do the eight cylinders ignite on the 5.0L?", "type": "paraphrase", "answer_contains": ["1-3-7-2-6-5-4-8"], "answer": "1-3-7-2-6-5-4-8"},
+  {"id": "compression_para", "question": "How high is the compression on the 5.0L Coyote?", "type": "paraphrase", "answer_contains": ["10.5:1"], "answer": "10.5:1"},
+  {"id": "gap_para", "question": "What electrode gap should the plugs be set to on the 5.0L?", "type": "paraphrase", "answer_contains": ["1.25-1.35"], "answer": "1.25-1.35 mm"},
+  {"id": "oil_pressure_para", "question": "Roughly what oil pressure is normal at warm idle on the 5.0L?", "type": "paraphrase", "answer_contains": ["10-15psi"], "answer": "10-15 psi"}
+]
