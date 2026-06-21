@@ -3,23 +3,23 @@
 ## What this is
 
 The CLI for Mechanics-Sidekick. The web app (see the [README](../README.md)) is the
-primary interface; the CLI shares the same SQLite database. You load PDFs against a
-vehicle, open a job, and ask questions — every answer is grounded in your own
-documents with page citations.
+primary interface; the CLI shares the same SQLite database **and the same agentic
+assistant** — `chat` searches your manuals, the web, and past diagnostic reports, and
+streams its answer with page citations.
 
-**Privacy:** by default the app uses **OpenAI** for chat and embeddings, so questions
-and retrieved manual excerpts are sent to the cloud (the README has the full privacy
-note). For a **fully-local** setup, set `EMBED_PROVIDER=ollama` and `LLM_PROVIDER=ollama`
-in `.env` — then the LLM and embeddings run via Ollama on localhost and nothing leaves
-your machine.
+**Privacy / providers:** the chat **agent uses OpenAI** (tool-calling) — the same for the
+CLI and the web app — so questions and retrieved manual excerpts are sent to the cloud.
+Document **ingestion** (embeddings + per-chunk context summaries) honors the provider
+seam: keep it on OpenAI (default), or set `EMBED_PROVIDER=ollama` / `LLM_PROVIDER=ollama`
+to run *ingestion* locally. Chat itself still requires an `OPENAI_API_KEY`.
 
 ## Prerequisites
 
 - `uv` (Python package manager) — Python 3.11+
-- **Default (OpenAI):** an `OPENAI_API_KEY` set in `.env`.
-- **Local option (instead of OpenAI):** Ollama reachable at `http://localhost:11434`
-  with `llama3.2:3b` (chat + per-chunk context summaries) and `nomic-embed-text`
-  (embeddings) pulled, plus `EMBED_PROVIDER=ollama` / `LLM_PROVIDER=ollama` in `.env`.
+- An **`OPENAI_API_KEY`** in `.env` — required for chat (the agent uses OpenAI).
+- *Optional, for local ingestion:* Ollama at `http://localhost:11434` with `llama3.2:3b`
+  (context summaries) and `nomic-embed-text` (embeddings) pulled, plus
+  `EMBED_PROVIDER=ollama` / `LLM_PROVIDER=ollama` in `.env`.
 - Linux/macOS shell. Tested on Ubuntu.
 
 ## First-time setup
