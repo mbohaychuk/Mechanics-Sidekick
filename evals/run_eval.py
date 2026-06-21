@@ -14,7 +14,7 @@ from pathlib import Path
 from app.cli import get_session  # reuse the same DB session seam the CLI/app use
 from app.config import settings
 from app.repositories.chunk_repository import ChunkRepository
-from app.services.llm_factory import make_embedding_service
+from app.services.llm_factory import make_embedding_service, make_reranker
 from app.services.retrieval_service import RetrievalService
 from evals.golden import load_golden
 from evals.runner import run_eval
@@ -25,17 +25,22 @@ def main() -> None:
     parser.add_argument("--vehicle-id", type=int, required=True)
     parser.add_argument("--golden", default="evals/golden_questions.json")
     parser.add_argument("--k", type=int, default=settings.top_k_chunks)
-    parser.add_argument("--label", default="baseline", help="report label (e.g. baseline, 1A-hybrid)")
+    parser.add_argument("--label", default="baseline", help="report label (e.g. baseline, 1A-rerank)")
+    parser.add_argument("--rerank-provider", default=settings.rerank_provider, help="none | local")
+    parser.add_argument("--rerank-candidates", type=int, default=settings.rerank_candidates)
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
 
+    settings.rerank_provider = args.rerank_provider  # let the CLI flag drive the seam for an A/B run
     questions = load_golden(args.golden)
     embedding = make_embedding_service(settings)
+    reranker = make_reranker(settings)
     with get_session() as session:
-        retrieval = RetrievalService(ChunkRepository(session), embedding, args.k)
+        retrieval = RetrievalService(ChunkRepository(session), embedding, args.k, reranker, args.rerank_candidates)
         report = run_eval(retrieval, args.vehicle_id, questions, args.k)
 
-    report.update({"label": args.label, "k": args.k, "vehicle_id": args.vehicle_id})
+    report.update({"label": args.label, "k": args.k, "vehicle_id": args.vehicle_id,
+                   "rerank_provider": args.rerank_provider})
     s = report["summary"]
     print(f"[{args.label}] n={s['n']}  hit@1={s['hit_rate_at_1']:.3f}  "
           f"hit@{args.k}={s['hit_rate']:.3f}  MRR={s['mrr']:.3f}")

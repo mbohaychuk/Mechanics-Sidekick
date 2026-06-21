@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     max_agent_iters: int = 6
     llm_provider: str = "openai"
     embed_provider: str = "openai"
+    rerank_provider: str = "none"        # none | local — 'local' cross-encoder reorders the dense top-N
+    rerank_candidates: int = 40          # dense pool reranked, then truncated to top_k_chunks
+    rerank_model: str = "ms-marco-MiniLM-L-12-v2"  # FlashRank model (needs: uv sync --group rerank)
     openai_api_key: str = ""
     openai_chat_model: str = "gpt-4.1-mini"
     openai_embed_model: str = "text-embedding-3-small"
