@@ -56,15 +56,20 @@ hit@5 = a relevant chunk in the top-5; MRR = rank of the first relevant chunk.
 
 | Pipeline state | hit@1 | hit@5 | MRR | exact_token hit@5 | paraphrase hit@5 | conceptual hit@5 |
 |---|---|---|---|---|---|---|
-| **Dense-only (baseline)** | **0.400** | **0.840** | **0.581** | 1.000 | 0.750 | 0.833 |
-| + 1A hybrid (BM25+RRF+rerank) | | | | | | |
+| Dense-only (baseline) | 0.400 | 0.840 | 0.581 | 1.000 | 0.750 | 0.833 |
+| **+ 1A reranker** (cross-encoder, top-40→5) | **0.480** | **0.960** | **0.659** | 1.000 | 0.875 | 1.000 |
+| + 1A BM25 hybrid (next) | | | | | | |
 | + 1B table-aware | | | | | | |
 | + 1C sectional context | | | | | | |
 | + 2D parent-child | | | | | | |
 
 **Baseline finding (this reframed the redesign).** Dense retrieval is *not* broken on exact tokens
-— it lands a relevant chunk in the top-5 for **every** literal-code query. The real headroom is:
-(1) **hit@1 = 0.40** — the right chunk is rarely rank 1, the direct target of a cross-encoder
-reranker; and (2) **paraphrase hit@5 = 0.75** — queries without the literal token are where dense
-weakens and hybrid/BM25 can help. So 1A's expected win is in **ranking (hit@1 / MRR) and paraphrase
-recall**, not the catastrophic exact-token failure the source research assumed. Lead with hit@1.
+— it lands a relevant chunk in the top-5 for **every** literal-code query. The real headroom is
+**hit@1 = 0.40** (the right chunk is rarely rank 1) and **paraphrase hit@5 = 0.75**.
+
+**1A reranker result.** Expanding the dense pool to top-40 and reordering with a local cross-encoder
+(FlashRank `ms-marco-MiniLM-L-12-v2`, `RERANK_PROVIDER=local`) lifts **hit@1 0.40→0.48, hit@5
+0.84→0.96, MRR 0.58→0.66**. The pool expansion **recovered 3 questions that dense missed entirely**
+(compression_ratio, firing_order, firing_order_para — all beyond dense rank 5). It is a *net* win,
+not monotonic: 5 questions regressed (cross-encoders re-rank imperfectly). Stays **opt-in** (needs
+`uv sync --group rerank`); the base install default is `none`.
