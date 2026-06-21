@@ -50,6 +50,8 @@ class DocumentOut(BaseModel):
     document_type: str
     processing_status: str
     uploaded_utc: datetime
+    chunks_total: int | None = None
+    chunks_done: int | None = None
 
 
 class ChatMessageIn(BaseModel):

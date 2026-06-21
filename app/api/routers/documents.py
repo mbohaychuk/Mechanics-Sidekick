@@ -49,7 +49,11 @@ def upload_document(
         while chunk := file.file.read(1024 * 1024):
             written += len(chunk)
             if written > settings.max_upload_bytes:
-                raise HTTPException(status_code=413, detail="Upload too large")
+                limit_mb = settings.max_upload_bytes // (1024 * 1024)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File is larger than the {limit_mb} MB upload limit.",
+                )
             tmp.write(chunk)
         tmp.flush()
 

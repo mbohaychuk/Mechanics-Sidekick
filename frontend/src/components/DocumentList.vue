@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import type { Document } from '@/api/types'
 
 const props = defineProps<{ vehicleId: number }>()
 const documents = ref<Document[]>([])
 const uploading = ref(false)
 const dragOver = ref(false)
+const uploadError = ref('')
 const timers = new Map<number, ReturnType<typeof setInterval>>()
 
 async function load() {
@@ -17,12 +18,16 @@ async function load() {
 function poll(doc: Document) {
   if (timers.has(doc.id)) return
   const timer = setInterval(async () => {
-    const fresh = await api.getDocument(doc.id)
-    const i = documents.value.findIndex((d) => d.id === fresh.id)
-    if (i !== -1) documents.value[i] = fresh
-    if (fresh.processing_status !== 'pending') {
-      clearInterval(timer)
-      timers.delete(doc.id)
+    try {
+      const fresh = await api.getDocument(doc.id)
+      const i = documents.value.findIndex((d) => d.id === fresh.id)
+      if (i !== -1) documents.value[i] = fresh
+      if (fresh.processing_status !== 'pending') {
+        clearInterval(timer)
+        timers.delete(doc.id)
+      }
+    } catch {
+      /* transient poll error — keep polling, the next tick may succeed */
     }
   }, 2000)
   timers.set(doc.id, timer)
@@ -31,15 +36,27 @@ function poll(doc: Document) {
 async function upload(files: FileList | null) {
   if (!files?.length) return
   uploading.value = true
+  uploadError.value = ''
   try {
     for (const file of Array.from(files)) {
-      const doc = await api.uploadDocument(props.vehicleId, file)
-      documents.value = [doc, ...documents.value]
-      poll(doc)
+      try {
+        const doc = await api.uploadDocument(props.vehicleId, file)
+        documents.value = [doc, ...documents.value]
+        poll(doc)
+      } catch (err) {
+        const detail = err instanceof ApiError ? err.detail : (err as Error).message
+        uploadError.value = `${file.name}: ${detail}`
+      }
     }
   } finally {
     uploading.value = false
   }
+}
+
+function progressLabel(d: Document): string {
+  if (d.processing_status !== 'pending') return 'INDEXING'
+  if (d.chunks_total) return `EMBEDDING ${d.chunks_done ?? 0}/${d.chunks_total}`
+  return 'EXTRACTING'
 }
 
 function onDrop(e: DragEvent) {
@@ -133,6 +150,12 @@ onUnmounted(() => timers.forEach((t) => clearInterval(t)))
         @change="upload(($event.target as HTMLInputElement).files)" />
     </label>
 
+    <!-- Upload error -->
+    <p v-if="uploadError" role="alert"
+       class="mb-4 rounded-md border border-danger/30 bg-danger/8 px-3 py-2 font-mono text-xs text-danger">
+      Upload failed — {{ uploadError }}
+    </p>
+
     <!-- Document list -->
     <div v-if="documents.length === 0" class="rounded-card border border-dashed border-border px-4 py-6 text-center">
       <p class="font-mono text-xs text-muted/50">No documents — drop a service manual above</p>
@@ -155,16 +178,19 @@ onUnmounted(() => timers.forEach((t) => clearInterval(t)))
         <div class="min-w-0 flex-1">
           <span class="block truncate font-mono text-sm text-text">{{ d.file_name }}</span>
           <span class="font-mono text-xs capitalize text-muted/60">{{ docTypeLabel(d.document_type) }}</span>
+          <span v-if="d.processing_status === 'pending'" class="ml-2 font-mono text-[0.65rem] text-muted/40">
+            large manuals take a few minutes
+          </span>
         </div>
 
         <!-- Status pill -->
         <span
           v-if="statusConfig[d.processing_status]"
-          class="flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-xs font-medium"
+          class="flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-xs font-medium tabular-nums"
           :class="statusConfig[d.processing_status].cls"
         >
           <span class="h-1.5 w-1.5 rounded-full" :class="statusConfig[d.processing_status].dot" />
-          {{ statusConfig[d.processing_status].label }}
+          {{ d.processing_status === 'pending' ? progressLabel(d) : statusConfig[d.processing_status].label }}
         </span>
         <span v-else class="font-mono text-xs text-muted">{{ d.processing_status }}</span>
       </li>

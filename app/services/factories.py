@@ -36,6 +36,9 @@ def make_document_service(session: Session, settings: Settings) -> DocumentServi
         contextualization_service=make_contextualization_service(settings),
         embedding_service=make_embedding_service(settings),
         docs_dir=settings.docs_dir,
+        embed_batch_size=settings.embed_batch_size,
+        ingest_concurrency=settings.ingest_concurrency,
+        contextualize_max_chunks=settings.contextualize_max_chunks,
     )
 
 

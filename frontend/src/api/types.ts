@@ -32,7 +32,7 @@ export interface JobCreate {
   description?: string | null
 }
 
-export type ProcessingStatus = 'pending' | 'ready' | 'failed'
+export type ProcessingStatus = 'pending' | 'ready' | 'failed' | 'no_text'
 
 export interface Document {
   id: number
@@ -41,6 +41,8 @@ export interface Document {
   document_type: string
   processing_status: ProcessingStatus
   uploaded_utc: string
+  chunks_total?: number | null
+  chunks_done?: number | null
 }
 
 export interface ChatMessage {
