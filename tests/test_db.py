@@ -1,8 +1,28 @@
 import pytest
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
+from app.db import Base, ensure_runtime_columns
 from app.models.job import Job
 from app.models.vehicle import Vehicle
+
+
+def test_ensure_runtime_columns_adds_missing_columns_to_old_db(tmp_path):
+    # Simulate a pre-release DB: create the documents table WITHOUT the new chunk columns,
+    # then assert the additive migration adds them idempotently (no migration framework yet).
+    engine = create_engine(f"sqlite:///{tmp_path/'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE documents (id INTEGER PRIMARY KEY, vehicle_id INTEGER, file_name TEXT, "
+            "stored_path TEXT, document_type TEXT, uploaded_utc TEXT, processing_status TEXT)"
+        ))
+
+    ensure_runtime_columns(engine)
+    cols = {c["name"] for c in inspect(engine).get_columns("documents")}
+    assert {"chunks_total", "chunks_done"} <= cols
+
+    ensure_runtime_columns(engine)  # idempotent: a second run is a no-op
+    assert {c["name"] for c in inspect(engine).get_columns("documents")} == cols
 
 
 def test_deleting_a_vehicle_cascades_to_its_jobs(db_session):

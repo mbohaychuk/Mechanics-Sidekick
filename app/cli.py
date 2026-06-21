@@ -4,7 +4,7 @@ from pathlib import Path
 import typer
 
 from app.config import settings
-from app.db import Base, get_engine, get_session_factory
+from app.db import Base, ensure_runtime_columns, get_engine, get_session_factory
 from app.utils.console import console, print_error, print_success, print_vehicle, print_job, print_answer
 
 app = typer.Typer(name="mechanic-sidekick", help="Local RAG assistant for mechanics.")
@@ -33,6 +33,7 @@ def _get_engine():
         db_path.parent.mkdir(parents=True, exist_ok=True)
         _engine = get_engine(f"sqlite:///{db_path}")
         Base.metadata.create_all(_engine)
+        ensure_runtime_columns(_engine)  # additive migration for older on-disk DBs
         _Session = get_session_factory(_engine)
     return _engine
 

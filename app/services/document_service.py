@@ -121,8 +121,19 @@ class DocumentService:
 
             self._doc_repo.update_status(doc.id, "ready")
         except Exception as exc:
+            # Per-batch commits make earlier batches' chunks durable; drop them so a failed
+            # document doesn't leave orphaned partial chunks (and stale progress) behind.
             self._doc_repo.session.rollback()
+            try:
+                self._chunk_repo.delete_by_document(doc.id)
+            except Exception:
+                logger.exception("failed to clean up partial chunks for document %s", doc.id)
+            doc_row = self._doc_repo.get_by_id(doc.id)
+            if doc_row is not None:
+                doc_row.chunks_done = None
+                doc_row.chunks_total = None
             self._doc_repo.update_status(doc.id, "failed")
+            self._doc_repo.session.commit()
             raise RuntimeError(f"Document processing failed: {exc}") from exc
 
         return doc

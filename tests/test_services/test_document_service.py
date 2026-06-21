@@ -135,3 +135,35 @@ def test_add_document_marks_failed_on_embedding_error(db_session, vehicle, sampl
     docs = DocumentRepository(db_session).list_by_vehicle(vehicle.id)
     assert len(docs) == 1
     assert docs[0].processing_status == "failed"
+
+
+def test_failed_ingest_midway_cleans_up_partial_chunks(db_session, vehicle, sample_pdf, tmp_path):
+    # 4 chunks, batch size 2: batch 1 embeds OK (2 chunks committed), batch 2 raises.
+    # The failed document must NOT leave its first batch's chunks orphaned.
+    chunks = [
+        {"chunk_index": i, "page_number": 1, "section_title": "S", "content": f"c{i}"}
+        for i in range(4)
+    ]
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    calls = {"n": 0}
+
+    def embed(texts):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return [[0.1, 0.2] for _ in texts]
+        raise RuntimeError("embedding backend down")
+
+    mock_embedding.embed_texts.side_effect = embed
+    svc = _make_svc(db_session, str(tmp_path / "docs"), mock_embedding,
+                    chunks=chunks, embed_batch_size=2, contextualize_max_chunks=99)
+
+    with pytest.raises(RuntimeError, match="Document processing failed"):
+        svc.add_document(vehicle_id=vehicle.id, pdf_path=str(sample_pdf))
+
+    doc = DocumentRepository(db_session).list_by_vehicle(vehicle.id)[0]
+    assert doc.processing_status == "failed"
+    assert doc.chunks_done is None and doc.chunks_total is None        # progress reset
+    assert ChunkRepository(db_session).list_by_vehicle(vehicle.id) == []  # no orphans (note: filtered to ready)
+    # also assert nothing is left at the table level, not just the ready-filtered view
+    from app.models.document_chunk import DocumentChunk
+    assert db_session.query(DocumentChunk).filter_by(document_id=doc.id).count() == 0

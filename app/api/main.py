@@ -13,7 +13,7 @@ import app.models  # noqa: F401 — register models with Base before create_all
 from app.agent.mcp_host import build_obd_host
 from app.api.routers import vehicles, jobs, documents, chat, scanner, config, telemetry, diagnostic
 from app.config import settings
-from app.db import Base, get_engine, get_session_factory
+from app.db import Base, ensure_runtime_columns, get_engine, get_session_factory
 from app.telemetry.manager import TelemetryManager
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ class SpaStaticFiles(StaticFiles):
 def configure_db(app: FastAPI, db_url: str) -> None:
     engine = get_engine(db_url)
     Base.metadata.create_all(engine)
+    ensure_runtime_columns(engine)  # additive migration for older on-disk DBs
     app.state.engine = engine
     app.state.session_factory = get_session_factory(engine)
 

@@ -11,6 +11,13 @@ class ChunkRepository:
     def bulk_create(self, chunks: list[DocumentChunk]) -> None:
         self.session.add_all(chunks)
 
+    def delete_by_document(self, document_id: int) -> None:
+        (
+            self.session.query(DocumentChunk)
+            .filter(DocumentChunk.document_id == document_id)
+            .delete(synchronize_session=False)
+        )
+
     def list_by_vehicle(self, vehicle_id: int) -> list[DocumentChunk]:
         """Return all chunks from ready documents belonging to this vehicle."""
         return (
