@@ -57,8 +57,9 @@ hit@5 = a relevant chunk in the top-5; MRR = rank of the first relevant chunk.
 | Pipeline state | hit@1 | hit@5 | MRR | exact_token hit@5 | paraphrase hit@5 | conceptual hit@5 |
 |---|---|---|---|---|---|---|
 | Dense-only (baseline) | 0.400 | 0.840 | 0.581 | 1.000 | 0.750 | 0.833 |
-| **+ 1A reranker** (cross-encoder, top-40→5) | **0.480** | **0.960** | **0.659** | 1.000 | 0.875 | 1.000 |
-| + 1A BM25 hybrid (next) | | | | | | |
+| + 1A reranker (cross-encoder, top-40→5) | 0.480 | **0.960** | 0.659 | 1.000 | 0.875 | 1.000 |
+| + 1A BM25 hybrid (FTS5+RRF) | **0.560** | 0.880 | **0.691** | 0.800 | 0.875 | 0.917 |
+| + 1A hybrid + reranker | 0.520 | 0.880 | 0.642 | 0.800 | 0.875 | 0.917 |
 | + 1B table-aware | | | | | | |
 | + 1C sectional context | | | | | | |
 | + 2D parent-child | | | | | | |
@@ -67,9 +68,16 @@ hit@5 = a relevant chunk in the top-5; MRR = rank of the first relevant chunk.
 — it lands a relevant chunk in the top-5 for **every** literal-code query. The real headroom is
 **hit@1 = 0.40** (the right chunk is rarely rank 1) and **paraphrase hit@5 = 0.75**.
 
-**1A reranker result.** Expanding the dense pool to top-40 and reordering with a local cross-encoder
-(FlashRank `ms-marco-MiniLM-L-12-v2`, `RERANK_PROVIDER=local`) lifts **hit@1 0.40→0.48, hit@5
-0.84→0.96, MRR 0.58→0.66**. The pool expansion **recovered 3 questions that dense missed entirely**
-(compression_ratio, firing_order, firing_order_para — all beyond dense rank 5). It is a *net* win,
-not monotonic: 5 questions regressed (cross-encoders re-rank imperfectly). Stays **opt-in** (needs
-`uv sync --group rerank`); the base install default is `none`.
+**1A reranker.** Pool-expand to top-40 + local cross-encoder (FlashRank `ms-marco-MiniLM-L-12-v2`)
+lifts **hit@5 0.84→0.96** and recovered 3 questions dense missed entirely. Best **hit@5**.
+
+**1A BM25 hybrid (FTS5 + RRF).** Best **hit@1 (0.56)** and **MRR (0.69)**. *The eval caught a real bug
+first:* OR-ing stopwords flooded BM25 with common-word matches and **regressed exact-token hit@5 to
+0.60**; dropping function words restored it to 0.80. Even fixed, hybrid slightly regresses exact-token
+recall (1.00→0.80) and **does not stack with the reranker** (combined is within noise of either alone).
+
+**Honest read (n=25, deltas this small are noisy).** No single config dominates: **reranker = best
+recall (hit@5 0.96, no regression); BM25 hybrid = best rank-1 precision (hit@1 0.56 / MRR 0.69) but
+trades a little exact-token recall.** Both are off in the base install. The senior call is to ship the
+reranker as the recommended config and keep hybrid opt-in + documented, rather than stack complexity
+that doesn't clearly pay — and to grow the golden set before trusting finer differences.
