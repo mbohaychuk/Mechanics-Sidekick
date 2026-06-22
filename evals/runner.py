@@ -51,11 +51,11 @@ def summarize(per_question: list[dict]) -> dict:
     return summary
 
 
-def run_eval(retrieval_service, vehicle_id: int, questions: list[dict], k: int) -> dict:
+def run_eval(retrieval_service, vehicle_id: int, questions: list[dict], k: int, mode: str = "auto") -> dict:
     """Score every golden question through retrieve() and return per-question + summary."""
     per_question: list[dict] = []
     for q in questions:
-        results = retrieval_service.retrieve(vehicle_id, q["question"])
+        results = retrieval_service.retrieve(vehicle_id, q["question"], mode=mode)
         flags = relevance_flags(results, q.get("answer_contains", []), q.get("relevant_pages", []))
         per_question.append({
             "id": q["id"],

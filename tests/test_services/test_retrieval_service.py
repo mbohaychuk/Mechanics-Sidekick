@@ -111,6 +111,32 @@ def test_retrieve_expands_pool_beyond_top_k_then_slices(db_session, vehicle_with
     assert len(results) == 1            # final result sliced back to top_k
 
 
+def test_retrieve_lookup_mode_skips_the_reranker(db_session, vehicle_with_chunks):
+    vehicle = vehicle_with_chunks
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    mock_embedding.embed_query.return_value = [1.0, 0.0, 0.0]
+
+    reranker = _ReverseReranker()
+    svc = RetrievalService(ChunkRepository(db_session), mock_embedding, top_k=2, reranker=reranker)
+    # 'lookup' queries (spec/value/code) must NOT be reranked — the cross-encoder buries exact matches.
+    results = svc.retrieve(vehicle_id=vehicle.id, question="q", mode="lookup")
+    assert reranker.received is None  # reranker never invoked
+    assert [c.content for c, _ in results] == ["Torque spec 129 Nm", "Minimum rotor thickness 20mm"]
+
+
+def test_retrieve_procedure_mode_applies_the_reranker(db_session, vehicle_with_chunks):
+    vehicle = vehicle_with_chunks
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    mock_embedding.embed_query.return_value = [1.0, 0.0, 0.0]
+
+    reranker = _ReverseReranker()
+    svc = RetrievalService(ChunkRepository(db_session), mock_embedding, top_k=2, reranker=reranker)
+    # 'procedure' queries (how-tos) DO get reranked — that's where the cross-encoder helps.
+    results = svc.retrieve(vehicle_id=vehicle.id, question="q", mode="procedure")
+    assert reranker.received is not None
+    assert [c.content for c, _ in results] == ["Minimum rotor thickness 20mm", "Torque spec 129 Nm"]
+
+
 def test_retrieve_hybrid_promotes_bm25_match_over_cosine(db_session, vehicle_with_chunks):
     vehicle = vehicle_with_chunks
     mock_embedding = MagicMock(spec=EmbeddingService)

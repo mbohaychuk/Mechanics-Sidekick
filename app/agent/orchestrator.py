@@ -25,7 +25,12 @@ SYSTEM_PROMPT = (
     "You are Mechanic Sidekick, an expert assistant for automotive repair and maintenance. "
     "The vehicle is: {vehicle}. "
     "You have tools: search_manuals (look up specifications, torque values, fluid types, and "
-    "procedures in the uploaded service manuals — prefer this for anything the manuals cover); "
+    "procedures in the uploaded service manuals — prefer this for anything the manuals cover). "
+    "When you call search_manuals, write a clean query — fix typos and spell out abbreviations "
+    "(e.g. 'ATF' -> 'automatic transmission fluid'), but copy any trouble code or part number "
+    "exactly as given (never change a code like P0420). Set intent='lookup' for a specific "
+    "spec/value/code and intent='procedure' for a how-to. If the excerpts do not contain the "
+    "answer, reformulate the query and search again before giving up. You also have "
     "read-only OBD tools (read live data, trouble codes (DTCs), freeze frames, readiness monitors, "
     "and vehicle info directly from the connected car); and web_search (the public web, for recalls, "
     "bulletins, and information not in the manuals — use only when the manuals do not cover it). "
@@ -183,7 +188,8 @@ class AgentOrchestrator:
     def _dispatch(self, tc: ToolCall, vehicle_id: int) -> dict:
         if tc.name == "search_manuals":
             return execute_search_manuals(
-                self._retrieval, self._doc_repo, vehicle_id, tc.arguments.get("query", "")
+                self._retrieval, self._doc_repo, vehicle_id,
+                tc.arguments.get("query", ""), tc.arguments.get("intent"),
             )
         if tc.name == "web_search" and self._web_search_client is not None:
             return execute_web_search(
