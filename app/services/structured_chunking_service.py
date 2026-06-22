@@ -22,6 +22,10 @@ from collections import Counter
 
 _HEADING_EXCLUSION_PREFIXES = ("Fig.", "Courtesy of", "NOTE", "CAUTION", "WARNING")
 
+# A table is kept whole only up to this multiple of chunk_size; a pathologically large table
+# (a multi-page DTC chart) is split beyond it so a single chunk can't blow the embedding token limit.
+_MAX_TABLE_CHUNK_FACTOR = 4
+
 
 class StructuredChunkingService:
     def __init__(self, chunk_size: int = 500, chunk_overlap: int = 100) -> None:
@@ -162,9 +166,15 @@ class StructuredChunkingService:
             if not total:
                 continue
 
+            max_chunk_words = self._chunk_size * _MAX_TABLE_CHUNK_FACTOR
             start = 0
+            last_end = 0
             while start < total:
-                end = self._snap_end_past_table(words, min(start + self._chunk_size, total), total)
+                end = self._snap_end_past_table(
+                    words, min(start + self._chunk_size, total), total, start + max_chunk_words
+                )
+                if end <= last_end:
+                    break  # a snapped table already pushed a prior window past here — nothing new
                 window = words[start:end]
                 # Cite the page contributing the most words to this chunk (tie -> earliest),
                 # not the first word's page — otherwise a chunk that spans a page boundary
@@ -180,6 +190,7 @@ class StructuredChunkingService:
                     }
                 )
                 chunk_index += 1
+                last_end = end
                 # Advance by the stride, but never restart inside the table this window just
                 # extended over (which would re-emit it many times for a large table).
                 start = max(start + stride, end - self._chunk_overlap)
@@ -187,9 +198,15 @@ class StructuredChunkingService:
         return chunks
 
     @staticmethod
-    def _snap_end_past_table(words: list[tuple], end: int, total: int) -> int:
+    def _snap_end_past_table(words: list[tuple], end: int, total: int, hard_cap: int) -> int:
         """Push a window's end forward so it never falls inside a table — if the words straddling
-        the boundary share a table key, extend until the table ends (or the section does)."""
-        while end < total and words[end - 1][2] is not None and words[end][2] == words[end - 1][2]:
+        the boundary share a table key, extend until the table ends, the section ends, or the
+        per-chunk word cap is reached (so a giant table can't produce one over-limit chunk)."""
+        while (
+            end < total
+            and end < hard_cap
+            and words[end - 1][2] is not None
+            and words[end][2] == words[end - 1][2]
+        ):
             end += 1
         return end

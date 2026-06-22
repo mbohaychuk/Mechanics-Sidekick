@@ -112,7 +112,9 @@ def test_real_pipeline_keeps_a_table_inline_in_one_chunk(db_session, vehicle, tm
         doc_repo=DocumentRepository(db_session),
         chunk_repo=ChunkRepository(db_session),
         pdf_service=PDFService(),
-        chunking_service=StructuredChunkingService(chunk_size=500, chunk_overlap=100),
+        # tiny chunk_size so that WITHOUT the atomic rule the ~14-word table would be sliced apart —
+        # this makes the "kept whole" assertion falsifiable end-to-end, not trivially true.
+        chunking_service=StructuredChunkingService(chunk_size=4, chunk_overlap=1),
         contextualization_service=MagicMock(spec=ContextualizationService, **{"generate_context.return_value": ""}),
         embedding_service=mock_embedding,
         docs_dir=str(tmp_path / "docs"),
@@ -124,7 +126,8 @@ def test_real_pipeline_keeps_a_table_inline_in_one_chunk(db_session, vehicle, tm
     holding = [c for c in chunks if "Front lug nut" in c.content]
     assert len(holding) == 1  # the table's cells are kept together, not scattered across chunks
     content = holding[0].content
-    assert "Fastener" in content and "150" in content  # header + value in the same chunk
+    # the whole table (header + both rows) survives in that single chunk despite chunk_size=4
+    assert all(t in content for t in ["Fastener", "Front lug nut", "150", "Rear lug nut"])
 
 
 def test_large_doc_skips_contextualization_batches_embeddings_and_tracks_progress(

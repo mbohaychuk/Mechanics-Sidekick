@@ -137,6 +137,20 @@ def test_retrieve_procedure_mode_applies_the_reranker(db_session, vehicle_with_c
     assert [c.content for c, _ in results] == ["Minimum rotor thickness 20mm", "Torque spec 129 Nm"]
 
 
+def test_retrieve_lookup_mode_keeps_hybrid_but_skips_reranker(db_session, vehicle_with_chunks):
+    vehicle = vehicle_with_chunks
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    mock_embedding.embed_query.return_value = [1.0, 0.0, 0.0]  # cosine favors the Torque chunk
+
+    reranker = _ReverseReranker()
+    svc = RetrievalService(ChunkRepository(db_session), mock_embedding, top_k=2,
+                           hybrid_search=True, reranker=reranker, rerank_candidates=40)
+    # lookup mode: BM25/RRF still lifts the keyword match, but the reranker is NOT applied.
+    results = svc.retrieve(vehicle.id, "minimum rotor thickness 20mm", mode="lookup")
+    assert reranker.received is None
+    assert [c.content for c, _ in results] == ["Minimum rotor thickness 20mm", "Torque spec 129 Nm"]
+
+
 def test_retrieve_hybrid_promotes_bm25_match_over_cosine(db_session, vehicle_with_chunks):
     vehicle = vehicle_with_chunks
     mock_embedding = MagicMock(spec=EmbeddingService)

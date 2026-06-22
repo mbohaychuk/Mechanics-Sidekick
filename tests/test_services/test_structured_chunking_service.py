@@ -179,6 +179,47 @@ def test_table_text_is_not_split_across_chunks():
     assert all(f"alpha{i}" in body for i in range(4))
 
 
+def test_oversized_table_splits_into_bounded_chunks_without_duplicates():
+    # A table far larger than chunk_size must NOT become one unbounded chunk (it would blow the
+    # embedding token limit). It splits into bounded chunks; every row survives; none are duplicates.
+    svc = StructuredChunkingService(chunk_size=10, chunk_overlap=2)  # atomic cap = 4 * 10 = 40 words
+    rows = [
+        _make_line([_make_span(f"r{i} aa bb")], bbox=[50, 100 + i * 10, 300, 108 + i * 10])
+        for i in range(30)  # 30 rows x 3 words = 90 words, > the 40-word cap
+    ]
+    pages = [_make_page(1,
+        blocks=[_make_block(rows, bbox=[50, 100, 300, 400])],
+        tables=[_table_region([45, 95, 305, 405])],
+    )]
+    chunks = svc.chunk_blocks(pages)
+    body_all = " " + " ".join(c["content"] for c in chunks) + " "
+    assert all(f" r{i} " in body_all for i in range(30))            # every row is somewhere
+    assert all(len(c["content"].split()) <= 40 for c in chunks)     # no chunk exceeds the cap
+    contents = [c["content"] for c in chunks]
+    assert len(contents) == len(set(contents))                      # no redundant duplicate chunk
+
+
+def test_right_column_prose_is_not_absorbed_into_a_left_column_table():
+    # A table in the left column must not swallow right-column prose whose lines sit at the same y.
+    svc = StructuredChunkingService(chunk_size=500, chunk_overlap=50)
+    pages = [_make_page(1,
+        blocks=[
+            _make_block([
+                _make_line([_make_span("leftrow1 cellA cellB")], bbox=[50, 100, 200, 116]),
+                _make_line([_make_span("leftrow2 cellC cellD")], bbox=[50, 120, 200, 136]),
+            ], bbox=[50, 100, 200, 136]),
+            _make_block([
+                _make_line([_make_span("Right column prose paragraph.")], bbox=[300, 105, 460, 121]),
+            ], bbox=[300, 105, 460, 121]),
+        ],
+        tables=[_table_region([45, 95, 210, 140])],  # covers only the LEFT column
+    )]
+    chunks = svc.chunk_blocks(pages)
+    # Right-column prose must not be tagged into the left table (its bbox-center is outside the table).
+    holding_right = [c for c in chunks if "Right column prose" in c["content"]]
+    assert holding_right, "right-column prose must still be chunked"
+
+
 def test_bold_cell_inside_a_table_is_not_treated_as_a_heading():
     # A gear/spec table often has bold cell labels; they must not break the table into sections.
     svc = StructuredChunkingService(chunk_size=500, chunk_overlap=50)
@@ -187,9 +228,9 @@ def test_bold_cell_inside_a_table_is_not_treated_as_a_heading():
             blocks=[
                 _make_block([
                     _make_line([_make_span("GEAR RATIOS", bold=True)], bbox=[50, 100, 200, 116]),
-                    _make_line([_make_span("First")], bbox=[50, 120, 200, 136]),
+                    _make_line([_make_span("FIRST", bold=True)], bbox=[50, 120, 200, 136]),  # bold ALL-CAPS data cell
                     _make_line([_make_span("3.97")], bbox=[50, 140, 200, 156]),
-                    _make_line([_make_span("Second")], bbox=[50, 160, 200, 176]),
+                    _make_line([_make_span("SECOND", bold=True)], bbox=[50, 160, 200, 176]),
                     _make_line([_make_span("2.32")], bbox=[50, 180, 200, 196]),
                 ], bbox=[50, 100, 200, 196]),
             ],
@@ -197,10 +238,12 @@ def test_bold_cell_inside_a_table_is_not_treated_as_a_heading():
         )
     ]
     chunks = svc.chunk_blocks(pages)
+    # The bold ALL-CAPS cells (GEAR RATIOS / FIRST / SECOND) would each look like a heading, but
+    # because they're inside the table bbox none start a section — the whole table is one chunk.
     holding = [c for c in chunks if "GEAR RATIOS" in c["content"]]
-    assert len(holding) == 1  # the whole table stays in one chunk, not split at the bold cells
+    assert len(holding) == 1
     body = holding[0]["content"]
-    assert "First" in body and "3.97" in body and "Second" in body and "2.32" in body
+    assert "FIRST" in body and "3.97" in body and "SECOND" in body and "2.32" in body
 
 
 def test_prose_without_tables_still_splits_normally():

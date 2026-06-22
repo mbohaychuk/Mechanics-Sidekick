@@ -7,8 +7,9 @@ so every change to the retrieval pipeline is judged on a **measured delta**, not
 
 The retrieval redesign's thesis is *precision on exact tokens* (DTC codes like `P0420`, part
 numbers, torque specs) that dense embeddings structurally blur. This harness captures a
-**dense-only baseline** and re-runs after each retrieval phase (hybrid BM25+RRF, reranking,
-table-aware ingestion, sectional context, parent-child) to prove — or disprove — each phase.
+**dense-only baseline** and re-runs after each retrieval change (hybrid BM25+RRF, reranking,
+query-adaptive routing, whole-table chunking) to prove — or disprove — each. (Table *extraction*
+into separate chunks and LLM table summaries were both tried this way and **disproved**.)
 
 ## What it measures
 
@@ -16,7 +17,7 @@ Each golden question carries the manual page(s) that actually answer it (labels 
 searching the extracted manual text**, not guessed). Retrieval is run through the real
 `RetrievalService.retrieve()` seam; chunks are mapped to their cited page, and we score:
 
-- **Recall@k** — fraction of a question's relevant pages found in the top-k.
+- **Hit@k** — whether any relevant chunk is in the top-k (the metric the harness computes).
 - **MRR** — mean reciprocal rank of the first relevant page.
 - **Hit-rate** — share of questions with any relevant page in the top-k.
 
@@ -25,10 +26,11 @@ BM25 should help most) vs **`conceptual`** (spec/procedure questions).
 
 ## Layout
 
-- `metrics.py` — pure scoring functions (`recall_at_k`, `reciprocal_rank`). Unit-tested.
+- `metrics.py` — pure scoring functions (`hit_at_k`, `reciprocal_rank`). Unit-tested.
 - `runner.py` — chunk→page-label adapter + aggregation + `run_eval()` over a retrieval service.
 - `golden.py` — strict loader/validator for the golden set.
-- `golden_questions.json` — the 19 labeled F-150 questions (pages verified against the manual).
+- `golden_questions.json` — 25 labeled F-150 questions; `golden_questions_tables.json` — 24
+  table-lookup questions (capacities, torque, fluid types). Both verified against the manual.
 - `run_eval.py` — entrypoint that runs the set through the real `RetrievalService` and writes a report.
 
 ## Usage
@@ -88,7 +90,10 @@ No single config wins both. The fix is **query-adaptive routing**: the agent tag
 call with `intent` (`lookup` \| `procedure`), and `RetrievalService.retrieve(mode=…)` skips the reranker
 for lookups (dense already lands spec tables at 0.79) and applies it for procedures (0.96). Routed, the
 system gets **0.792 on lookups *and* 0.960 on procedures** — beating all-reranker (0.58 lookups) and
-all-dense (0.84 procedures). The agent classified lookup-vs-procedure at **100%** on these 49 questions.
+all-dense (0.84 procedures). A one-off probe — the chat model labeling each golden question `lookup`
+vs `procedure` — matched the expected route on **all 29 unambiguous questions** (24 table-lookups +
+5 procedures); the remaining spec/DTC questions all routed (correctly) to `lookup`. This is a manual
+spot-check, not a harness metric.
 
 **What was tried and reverted.** Explicit table *extraction* (separate per-row chunks, then LLM table
 summaries) was implemented and measured — both **regressed** retrieval (summaries drop the exact value;

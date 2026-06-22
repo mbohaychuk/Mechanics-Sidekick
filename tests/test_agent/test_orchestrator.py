@@ -52,6 +52,22 @@ def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_c
     )
 
 
+def test_search_manuals_intent_is_threaded_to_retrieval_mode(db_session):
+    # The whole routing feature hinges on the orchestrator pulling `intent` out of the tool-call
+    # arguments and passing it through to retrieve(mode=...). Guard that seam end-to-end.
+    _seed(db_session)
+    provider = FakeProvider(
+        [
+            ProviderTurn(text="", tool_calls=[
+                ToolCall("c1", "search_manuals", {"query": "oil capacity", "intent": "lookup"})]),
+            ProviderTurn(text="It takes 7.3 L.", tool_calls=[]),
+        ]
+    )
+    orch = _orchestrator(db_session, provider)
+    list(orch.run(job_id=1, user_message="what oil capacity?"))
+    orch._retrieval.retrieve.assert_called_once_with(vehicle_id=1, question="oil capacity", mode="lookup")
+
+
 def test_tool_then_answer_flow(db_session):
     _seed(db_session)
     provider = FakeProvider(

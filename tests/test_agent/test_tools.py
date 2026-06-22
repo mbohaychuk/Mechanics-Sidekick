@@ -47,6 +47,14 @@ def test_execute_unknown_intent_falls_back_to_auto():
     retrieval.retrieve.assert_called_once_with(vehicle_id=1, question="x", mode="auto")
 
 
+def test_execute_intent_is_case_insensitive():
+    # the model may emit 'Lookup' / 'PROCEDURE'; routing must not silently fall back to auto.
+    retrieval = MagicMock()
+    retrieval.retrieve.return_value = []
+    execute_search_manuals(retrieval, MagicMock(), vehicle_id=1, query="x", intent="LOOKUP")
+    retrieval.retrieve.assert_called_once_with(vehicle_id=1, question="x", mode="lookup")
+
+
 def test_execute_empty_results():
     retrieval = MagicMock()
     retrieval.retrieve.return_value = []
