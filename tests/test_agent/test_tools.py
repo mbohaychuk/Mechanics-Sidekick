@@ -55,6 +55,15 @@ def test_execute_intent_is_case_insensitive():
     retrieval.retrieve.assert_called_once_with(vehicle_id=1, question="x", mode="lookup")
 
 
+def test_execute_includes_section_context_in_excerpt():
+    chunk = SimpleNamespace(document_id=1, page_number=8525, content="Service fill 7.75 qt",
+                            section_title="ENGINE - 5.0L 32V TI-VCT | ENGINE OIL CAPACITY")
+    retrieval = MagicMock(); retrieval.retrieve.return_value = [(chunk, 0.9)]
+    doc_repo = MagicMock(); doc_repo.get_by_id.return_value = SimpleNamespace(file_name="m.pdf")
+    result = execute_search_manuals(retrieval, doc_repo, vehicle_id=1, query="oil capacity 5.0L")
+    assert "ENGINE - 5.0L 32V TI-VCT" in result["model_text"]  # the model can see which engine
+
+
 def test_execute_empty_results():
     retrieval = MagicMock()
     retrieval.retrieve.return_value = []

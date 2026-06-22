@@ -52,7 +52,13 @@ def execute_search_manuals(
         page = chunk.page_number
         sources.append({"filename": filename, "page": page, "score": round(score, 4)})
         page_label = f"page {page}" if page is not None else "page unknown"
-        excerpts.append(f"[{i}] {filename}, {page_label}:\n{chunk.content}")
+        # Include the section/variant context (e.g. "ENGINE - 5.0L | …") so the model can tell which
+        # engine/system an otherwise-generic spec belongs to and not mix variants.
+        where = f"{filename}, {page_label}"
+        section = getattr(chunk, "section_title", None)
+        if section:
+            where += f" — {section}"
+        excerpts.append(f"[{i}] {where}:\n{chunk.content}")
     model_text = "\n\n".join(excerpts) if excerpts else "No relevant excerpts found in the manuals."
     return {"sources": sources, "model_text": model_text}
 

@@ -30,7 +30,7 @@ def make_document_service(session: Session, settings: Settings) -> DocumentServi
     return DocumentService(
         doc_repo=DocumentRepository(session),
         chunk_repo=ChunkRepository(session),
-        pdf_service=PDFService(),
+        pdf_service=PDFService(settings.section_header_pattern),
         chunking_service=StructuredChunkingService(
             settings.chunk_size, settings.chunk_overlap
         ),

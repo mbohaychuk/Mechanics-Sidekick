@@ -246,6 +246,21 @@ def test_bold_cell_inside_a_table_is_not_treated_as_a_heading():
     assert "FIRST" in body and "3.97" in body and "SECOND" in body and "2.32" in body
 
 
+def test_section_context_is_prepended_to_chunk_section_title():
+    # The carried section/variant context (e.g. "ENGINE - 5.0L") must label each chunk so identical
+    # spec tables across engine variants are distinguishable.
+    svc = StructuredChunkingService(chunk_size=500, chunk_overlap=50)
+    page = _make_page(1, blocks=[
+        _make_block([_make_line([_make_span("ENGINE OIL CAPACITY", bold=True)])]),
+        _make_block([_make_line([_make_span("Service fill including oil filter 7.75 qt")])]),
+    ])
+    page["section_context"] = "ENGINE - 5.0L 32V TI-VCT"
+    chunks = svc.chunk_blocks([page])
+    spec = next(c for c in chunks if "7.75" in c["content"])
+    assert spec["section_title"].startswith("ENGINE - 5.0L 32V TI-VCT | ")
+    assert "ENGINE OIL CAPACITY" in spec["section_title"]
+
+
 def test_prose_without_tables_still_splits_normally():
     # The atomic rule must not change ordinary prose windowing (no tables -> identical behavior).
     svc = StructuredChunkingService(chunk_size=5, chunk_overlap=1)

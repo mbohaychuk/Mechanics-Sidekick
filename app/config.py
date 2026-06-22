@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     docs_dir: str = "./data/documents"
     chunk_size: int = 500
     chunk_overlap: int = 100
+    # Regex (one capture group) for the running header that names a manual's current section/variant,
+    # carried forward onto every chunk to disambiguate identical spec tables across variants. The
+    # default matches the Ford "Service Manual: <section>" header; tune per manual format.
+    section_header_pattern: str = r"Service Manual:\s*(.+)"
     embed_batch_size: int = 128          # texts per embedding API call (token/array-limit safe)
     ingest_concurrency: int = 8          # concurrent context-summary LLM calls during ingestion
     contextualize_max_chunks: int = 1500  # above this, skip per-chunk LLM context (embed raw + metadata) to keep huge manuals fast/cheap

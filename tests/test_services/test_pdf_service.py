@@ -104,6 +104,27 @@ def test_extract_blocks_no_tables_on_plain_page(sample_pdf):
     assert all(page["tables"] == [] for page in pages)
 
 
+@pytest.fixture
+def multi_section_pdf(tmp_path) -> Path:
+    # Mimics a manual concatenated from per-section documents: a "Service Manual: <section>" marker
+    # appears only on each section's first page; continuation pages have none.
+    path = tmp_path / "multi.pdf"
+    doc = fitz.open()
+    p1 = doc.new_page(); p1.insert_text((50, 40), "Service Manual: ENGINE - 5.0L"); p1.insert_text((50, 110), "Oil capacity 7.75 qt")
+    p2 = doc.new_page(); p2.insert_text((50, 110), "Cylinder head bolt torque 75 Nm")  # continuation, no marker
+    p3 = doc.new_page(); p3.insert_text((50, 40), "Service Manual: ENGINE - 2.7L"); p3.insert_text((50, 110), "Oil capacity 6.0 qt")
+    doc.save(str(path)); doc.close()
+    return path
+
+
+def test_extract_blocks_carries_section_context_forward(multi_section_pdf):
+    pages = PDFService().extract_blocks(str(multi_section_pdf))
+    ctx = {p["page_number"]: p["section_context"] for p in pages}
+    assert ctx[1] == "ENGINE - 5.0L"
+    assert ctx[2] == "ENGINE - 5.0L"   # inherited — no marker on the continuation page
+    assert ctx[3] == "ENGINE - 2.7L"   # a new section marker resets it
+
+
 def test_table_detection_failure_is_logged_not_silent(monkeypatch, sample_pdf, caplog):
     import logging
 

@@ -46,7 +46,8 @@ class StructuredChunkingService:
         """
         body_size = self._detect_body_size(page_blocks)
         sections = self._split_into_sections(page_blocks, body_size)
-        return self._sections_to_chunks(sections)
+        page_context = {p["page_number"]: p.get("section_context", "") for p in page_blocks}
+        return self._sections_to_chunks(sections, page_context)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ class StructuredChunkingService:
                 return (page_num, i)
         return None
 
-    def _sections_to_chunks(self, sections: list[dict]) -> list[dict]:
+    def _sections_to_chunks(self, sections: list[dict], page_context: dict[int, str]) -> list[dict]:
         """Split each section into word-count windows, never cutting through a table."""
         chunks: list[dict] = []
         chunk_index = 0
@@ -181,11 +182,15 @@ class StructuredChunkingService:
                 # points at where it starts rather than where its content actually lives.
                 page_counts = Counter(p for _, p, _ in window)
                 page_number = min(page_counts, key=lambda p: (-page_counts[p], p))
+                # Stamp the chunk with its carried section/variant context (e.g. "ENGINE - 5.0L"),
+                # so an otherwise-identical spec table is disambiguated from other engine variants.
+                context = page_context.get(page_number, "")
+                section_title = f"{context} | {section['title']}" if context else section["title"]
                 chunks.append(
                     {
                         "chunk_index": chunk_index,
                         "page_number": page_number,
-                        "section_title": section["title"],
+                        "section_title": section_title,
                         "content": " ".join(w for w, _, _ in window),
                     }
                 )
