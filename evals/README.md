@@ -83,14 +83,19 @@ procedures *craters* spec-table lookups:**
 
 | Question type (atomic-table corpus, vehicle 4) | dense / `lookup` mode | reranker / `procedure` mode |
 |---|---|---|
-| **table lookups** (n=24) | **0.792** | 0.583 |
-| **procedures + DTC** (n=25) | 0.840 | **0.960** |
+| **table lookups** (n=111) | **0.874** | 0.775 |
+| **prose: specs / DTC / procedures** (n=64) | 0.828 | **0.922** |
+
+(numbers on the grown 175-question golden set; an earlier n=49 run showed the same direction with a wider
+gap — table lookups 0.79 vs 0.58 — but the larger set is more trustworthy.)
 
 No single config wins both. The fix is **query-adaptive routing**: the agent tags each `search_manuals`
 call with `intent` (`lookup` \| `procedure`), and `RetrievalService.retrieve(mode=…)` skips the reranker
-for lookups (dense already lands spec tables at 0.79) and applies it for procedures (0.96). Routed, the
-system gets **0.792 on lookups *and* 0.960 on procedures** — beating all-reranker (0.58 lookups) and
-all-dense (0.84 procedures). A one-off probe — the chat model labeling each golden question `lookup`
+for lookups and applies it for prose/procedures. Routed, the system gets **0.874 on table lookups *and*
+0.922 on prose** — beating all-reranker (0.775 lookups) and all-dense (0.828 prose). The larger eval shows
+the real split is **table chunks vs prose chunks** (the cross-encoder mis-ranks pipe-delimited table text
+but helps prose, *including* spec values that live in prose); the agent's lookup/procedure intent is a good
+proxy for the dominant case (capacity/torque tables → `lookup`). A one-off probe — the chat model labeling each golden question `lookup`
 vs `procedure` — matched the expected route on **all 29 unambiguous questions** (24 table-lookups +
 5 procedures); the remaining spec/DTC questions all routed (correctly) to `lookup`. This is a manual
 spot-check, not a harness metric.
