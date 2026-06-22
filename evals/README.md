@@ -7,8 +7,9 @@ so every change to the retrieval pipeline is judged on a **measured delta**, not
 
 The retrieval redesign's thesis is *precision on exact tokens* (DTC codes like `P0420`, part
 numbers, torque specs) that dense embeddings structurally blur. This harness captures a
-**dense-only baseline** and re-runs after each retrieval phase (hybrid BM25+RRF, reranking,
-table-aware ingestion, sectional context, parent-child) to prove — or disprove — each phase.
+**dense-only baseline** and re-runs after each retrieval change (hybrid BM25+RRF, reranking,
+query-adaptive routing, whole-table chunking) to prove — or disprove — each. (Table *extraction*
+into separate chunks and LLM table summaries were both tried this way and **disproved**.)
 
 ## What it measures
 
@@ -16,7 +17,7 @@ Each golden question carries the manual page(s) that actually answer it (labels 
 searching the extracted manual text**, not guessed). Retrieval is run through the real
 `RetrievalService.retrieve()` seam; chunks are mapped to their cited page, and we score:
 
-- **Recall@k** — fraction of a question's relevant pages found in the top-k.
+- **Hit@k** — whether any relevant chunk is in the top-k (the metric the harness computes).
 - **MRR** — mean reciprocal rank of the first relevant page.
 - **Hit-rate** — share of questions with any relevant page in the top-k.
 
@@ -25,10 +26,11 @@ BM25 should help most) vs **`conceptual`** (spec/procedure questions).
 
 ## Layout
 
-- `metrics.py` — pure scoring functions (`recall_at_k`, `reciprocal_rank`). Unit-tested.
+- `metrics.py` — pure scoring functions (`hit_at_k`, `reciprocal_rank`). Unit-tested.
 - `runner.py` — chunk→page-label adapter + aggregation + `run_eval()` over a retrieval service.
 - `golden.py` — strict loader/validator for the golden set.
-- `golden_questions.json` — the 19 labeled F-150 questions (pages verified against the manual).
+- `golden_questions.json` — 25 labeled F-150 questions; `golden_questions_tables.json` — 24
+  table-lookup questions (capacities, torque, fluid types). Both verified against the manual.
 - `run_eval.py` — entrypoint that runs the set through the real `RetrievalService` and writes a report.
 
 ## Usage
@@ -60,9 +62,6 @@ hit@5 = a relevant chunk in the top-5; MRR = rank of the first relevant chunk.
 | + 1A reranker (cross-encoder, top-40→5) | 0.480 | **0.960** | 0.659 | 1.000 | 0.875 | 1.000 |
 | + 1A BM25 hybrid (FTS5+RRF) | **0.560** | 0.880 | **0.691** | 0.800 | 0.875 | 0.917 |
 | + 1A hybrid + reranker | 0.520 | 0.880 | 0.642 | 0.800 | 0.875 | 0.917 |
-| + 1B table-aware | | | | | | |
-| + 1C sectional context | | | | | | |
-| + 2D parent-child | | | | | | |
 
 **Baseline finding (this reframed the redesign).** Dense retrieval is *not* broken on exact tokens
 — it lands a relevant chunk in the top-5 for **every** literal-code query. The real headroom is
@@ -76,8 +75,34 @@ first:* OR-ing stopwords flooded BM25 with common-word matches and **regressed e
 0.60**; dropping function words restored it to 0.80. Even fixed, hybrid slightly regresses exact-token
 recall (1.00→0.80) and **does not stack with the reranker** (combined is within noise of either alone).
 
-**Honest read (n=25, deltas this small are noisy).** No single config dominates: **reranker = best
-recall (hit@5 0.96, no regression); BM25 hybrid = best rank-1 precision (hit@1 0.56 / MRR 0.69) but
-trades a little exact-token recall.** Both are off in the base install. The senior call is to ship the
-reranker as the recommended config and keep hybrid opt-in + documented, rather than stack complexity
-that doesn't clearly pay — and to grow the golden set before trusting finer differences.
+## Table lookups + query-adaptive routing (the 1B outcome)
+
+A second, **table-focused** golden set (`golden_questions_tables.json`, 24 verified questions: fluid
+capacities, fluid types, torque specs) exposed the central tension — **the reranker that *makes*
+procedures *craters* spec-table lookups:**
+
+| Question type (atomic-table corpus, vehicle 4) | dense / `lookup` mode | reranker / `procedure` mode |
+|---|---|---|
+| **table lookups** (n=24) | **0.792** | 0.583 |
+| **procedures + DTC** (n=25) | 0.840 | **0.960** |
+
+No single config wins both. The fix is **query-adaptive routing**: the agent tags each `search_manuals`
+call with `intent` (`lookup` \| `procedure`), and `RetrievalService.retrieve(mode=…)` skips the reranker
+for lookups (dense already lands spec tables at 0.79) and applies it for procedures (0.96). Routed, the
+system gets **0.792 on lookups *and* 0.960 on procedures** — beating all-reranker (0.58 lookups) and
+all-dense (0.84 procedures). A one-off probe — the chat model labeling each golden question `lookup`
+vs `procedure` — matched the expected route on **all 29 unambiguous questions** (24 table-lookups +
+5 procedures); the remaining spec/DTC questions all routed (correctly) to `lookup`. This is a manual
+spot-check, not a harness metric.
+
+**What was tried and reverted.** Explicit table *extraction* (separate per-row chunks, then LLM table
+summaries) was implemented and measured — both **regressed** retrieval (summaries drop the exact value;
+per-row chunks doubled the corpus to ~19k and flooded the reranker). An exact-match BM25 "floor" was
+also a no-op (RRF hybrid already subsumes it). All reverted. What shipped instead is much smaller:
+**keep tables whole during normal chunking** (use `find_tables` bboxes only, so a window never cuts a
+table and a table's bold cells aren't read as headings — corpus *shrinks* to 10.4k) **+ routing.**
+
+**Honest read (n=49, deltas under ~0.08 are noisy).** Recommended config = **reranker on +
+query-adaptive routing** (rerank procedures, plain dense for lookups). The reranker is opt-in (needs
+`uv sync --group rerank`); routing is automatic once it is enabled. Grow the golden set before trusting
+finer differences.

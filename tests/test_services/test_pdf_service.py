@@ -37,3 +37,83 @@ def test_extract_pages_skips_empty_pages(tmp_path):
     svc = PDFService()
     pages = svc.extract_pages(str(pdf_path))
     assert pages == []
+
+
+def _draw_table(page, header, rows, x0=60, top=80, col_w=170, dy=24):
+    """Draw a bordered table (vector gridlines + cell text) that find_tables() detects reliably."""
+    grid = [header, *rows]
+    n_cols = len(header)
+    xs = [x0 + i * col_w for i in range(n_cols + 1)]
+    bottom = top + dy * len(grid)
+    for x in xs:
+        page.draw_line((x, top), (x, bottom))
+    y = top
+    for _ in range(len(grid) + 1):
+        page.draw_line((xs[0], y), (xs[-1], y))
+        y += dy
+    for r, cells in enumerate(grid):
+        for c, cell in enumerate(cells):
+            page.insert_text((xs[c] + 4, top + dy * r + 16), str(cell), fontsize=11)
+
+
+@pytest.fixture
+def table_pdf(tmp_path) -> Path:
+    pdf_path = tmp_path / "table.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((60, 50), "TORQUE SPECIFICATIONS", fontsize=14)
+    _draw_table(
+        page,
+        header=["Fastener", "Torque (lb-ft)"],
+        rows=[["Oil drain plug", "18"], ["Spark plug", "11"], ["Wheel lug nut", "150"]],
+    )
+    doc.save(str(pdf_path))
+    doc.close()
+    return pdf_path
+
+
+def test_extract_blocks_detects_table_region(table_pdf):
+    svc = PDFService()
+    pages = svc.extract_blocks(str(table_pdf))
+    assert len(pages) == 1
+    tables = pages[0]["tables"]
+    assert len(tables) == 1
+    assert len(tables[0]["bbox"]) == 4  # a bounding box, nothing more
+
+
+def test_extract_blocks_keeps_table_text_inline(table_pdf):
+    svc = PDFService()
+    pages = svc.extract_blocks(str(table_pdf))
+    block_text = " ".join(
+        s["text"]
+        for b in pages[0]["blocks"]
+        for line in b["lines"]
+        for s in line["spans"]
+    )
+    # Both the heading and the cell text stay as normal text blocks — the table is kept inline,
+    # not extracted out. The bbox (above) is used only to keep that text from being split.
+    assert "TORQUE SPECIFICATIONS" in block_text
+    assert "Oil drain plug" in block_text
+    assert "Wheel lug nut" in block_text
+
+
+def test_extract_blocks_no_tables_on_plain_page(sample_pdf):
+    svc = PDFService()
+    pages = svc.extract_blocks(str(sample_pdf))
+    assert pages
+    assert all(page["tables"] == [] for page in pages)
+
+
+def test_table_detection_failure_is_logged_not_silent(monkeypatch, sample_pdf, caplog):
+    import logging
+
+    def boom(*a, **k):
+        raise RuntimeError("detector exploded")
+
+    monkeypatch.setattr(fitz.Page, "find_tables", boom, raising=True)
+    svc = PDFService()
+    with caplog.at_level(logging.ERROR):
+        pages = svc.extract_blocks(str(sample_pdf))
+    # Degrades to no tables, but leaves a trace rather than swallowing silently.
+    assert all(p["tables"] == [] for p in pages)
+    assert any("table" in r.message.lower() for r in caplog.records)

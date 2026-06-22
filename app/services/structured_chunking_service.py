@@ -12,13 +12,19 @@ Figure captions ("Fig. ...") and attribution lines ("Courtesy of ...") are exclu
 even though they are often bold, since they are not structural headings.
 
 Within each detected section, text is split into overlapping word-count windows when
-the section exceeds chunk_size. The section title is carried on every chunk so it can
-be prepended to embeddings and displayed to the chat LLM.
+the section exceeds chunk_size. A table's text (located via PyMuPDF table bounding boxes)
+is kept **atomic**: a window boundary is never allowed to fall inside a table, so a spec
+value never gets cut from its column header. Tables ride inside the prose chunks — they are
+not split into separate chunks, which would double the corpus and flood retrieval.
 """
 from collections import Counter
 
 
 _HEADING_EXCLUSION_PREFIXES = ("Fig.", "Courtesy of", "NOTE", "CAUTION", "WARNING")
+
+# A table is kept whole only up to this multiple of chunk_size; a pathologically large table
+# (a multi-page DTC chart) is split beyond it so a single chunk can't blow the embedding token limit.
+_MAX_TABLE_CHUNK_FACTOR = 4
 
 
 class StructuredChunkingService:
@@ -30,8 +36,10 @@ class StructuredChunkingService:
         """Convert per-page block data into section-aware chunks.
 
         Args:
-            page_blocks: Output of PDFService.extract_blocks() —
-                         list of {"page_number": int, "blocks": list}
+            page_blocks: Output of PDFService.extract_blocks() — list of
+                         {"page_number": int, "blocks": list, "tables": list}.
+                         "tables" is optional; each carries a "bbox" used only to keep the
+                         table's text from being split across a chunk boundary.
 
         Returns:
             list of {"chunk_index", "page_number", "section_title", "content"}
@@ -92,72 +100,113 @@ class StructuredChunkingService:
     def _split_into_sections(
         self, page_blocks: list[dict], body_size: float
     ) -> list[dict]:
-        """Walk all blocks and group text under detected section headings."""
+        """Walk all blocks in PyMuPDF's native (column-aware) reading order, grouping text under
+        detected section headings. Each content line is tagged with the table it belongs to (if any),
+        so the windower below can keep that table's text together.
+
+        Block and line order is never disturbed — PyMuPDF emits whole columns top-to-bottom, so
+        re-sorting lines by y would scramble multi-column pages.
+        """
         sections: list[dict] = []
         current_title = ""
-        current_content: list[tuple[str, int]] = []  # (text, page_number)
+        current_content: list[tuple[str, int, object]] = []  # (text, page_number, table_key)
 
         for page in page_blocks:
             page_num = page["page_number"]
+            table_bboxes = [t["bbox"] for t in page.get("tables", []) if t.get("bbox")]
             for block in page["blocks"]:
                 for line in block["lines"]:
                     spans = [s for s in line["spans"] if s["text"].strip()]
                     if not spans:
                         continue
-
                     line_text = " ".join(s["text"] for s in spans).strip()
                     if not line_text:
                         continue
-
-                    if self._is_heading(spans, body_size):
+                    table_key = self._line_table_key(line, page_num, table_bboxes)
+                    # A bold cell inside a table is not a section heading — treating it as one would
+                    # fragment the table. Only out-of-table lines are eligible to start a section.
+                    if table_key is None and self._is_heading(spans, body_size):
                         if current_content:
-                            sections.append(
-                                {"title": current_title, "content": current_content}
-                            )
+                            sections.append({"title": current_title, "content": current_content})
                         current_title = line_text
                         current_content = []
                     else:
-                        current_content.append((line_text, page_num))
+                        current_content.append((line_text, page_num, table_key))
 
         if current_content:
             sections.append({"title": current_title, "content": current_content})
 
         return sections
 
+    @staticmethod
+    def _line_table_key(line: dict, page_num: int, table_bboxes: list) -> object:
+        """Return a stable key for the table containing this line (by bbox-center), else None."""
+        bbox = line.get("bbox")
+        if not bbox:
+            return None
+        cx, cy = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+        for i, (tx0, ty0, tx1, ty1) in enumerate(table_bboxes):
+            if tx0 <= cx <= tx1 and ty0 <= cy <= ty1:
+                return (page_num, i)
+        return None
+
     def _sections_to_chunks(self, sections: list[dict]) -> list[dict]:
-        """Split each section into word-count windows, carrying the section title."""
+        """Split each section into word-count windows, never cutting through a table."""
         chunks: list[dict] = []
         chunk_index = 0
         stride = max(self._chunk_size - self._chunk_overlap, 1)
 
         for section in sections:
-            words_with_pages: list[tuple[str, int]] = [
-                (word, page_num)
-                for text, page_num in section["content"]
+            words: list[tuple[str, int, object]] = [
+                (word, page_num, table_key)
+                for text, page_num, table_key in section["content"]
                 for word in text.split()
             ]
-            if not words_with_pages:
+            total = len(words)
+            if not total:
                 continue
 
-            total = len(words_with_pages)
+            max_chunk_words = self._chunk_size * _MAX_TABLE_CHUNK_FACTOR
             start = 0
+            last_end = 0
             while start < total:
-                end = min(start + self._chunk_size, total)
-                window = words_with_pages[start:end]
+                end = self._snap_end_past_table(
+                    words, min(start + self._chunk_size, total), total, start + max_chunk_words
+                )
+                if end <= last_end:
+                    break  # a snapped table already pushed a prior window past here — nothing new
+                window = words[start:end]
                 # Cite the page contributing the most words to this chunk (tie -> earliest),
                 # not the first word's page — otherwise a chunk that spans a page boundary
                 # points at where it starts rather than where its content actually lives.
-                page_counts = Counter(p for _, p in window)
+                page_counts = Counter(p for _, p, _ in window)
                 page_number = min(page_counts, key=lambda p: (-page_counts[p], p))
                 chunks.append(
                     {
                         "chunk_index": chunk_index,
                         "page_number": page_number,
                         "section_title": section["title"],
-                        "content": " ".join(w for w, _ in window),
+                        "content": " ".join(w for w, _, _ in window),
                     }
                 )
                 chunk_index += 1
-                start += stride
+                last_end = end
+                # Advance by the stride, but never restart inside the table this window just
+                # extended over (which would re-emit it many times for a large table).
+                start = max(start + stride, end - self._chunk_overlap)
 
         return chunks
+
+    @staticmethod
+    def _snap_end_past_table(words: list[tuple], end: int, total: int, hard_cap: int) -> int:
+        """Push a window's end forward so it never falls inside a table — if the words straddling
+        the boundary share a table key, extend until the table ends, the section ends, or the
+        per-chunk word cap is reached (so a giant table can't produce one over-limit chunk)."""
+        while (
+            end < total
+            and end < hard_cap
+            and words[end - 1][2] is not None
+            and words[end][2] == words[end - 1][2]
+        ):
+            end += 1
+        return end

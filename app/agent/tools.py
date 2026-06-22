@@ -18,8 +18,15 @@ SEARCH_MANUALS_TOOL = {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "What to look up, e.g. 'front brake caliper torque spec'.",
-                }
+                    "description": "What to look up, e.g. 'front brake caliper torque spec'. Fix typos "
+                    "and spell out abbreviations, but copy any trouble code or part number exactly.",
+                },
+                "intent": {
+                    "type": "string",
+                    "enum": ["lookup", "procedure"],
+                    "description": "'lookup' for a specific spec/value/code (capacity, torque, fluid "
+                    "type, DTC code); 'procedure' for a how-to or repair sequence. Tunes the search.",
+                },
             },
             "required": ["query"],
         },
@@ -32,8 +39,11 @@ def execute_search_manuals(
     doc_repo: DocumentRepository,
     vehicle_id: int,
     query: str,
+    intent: str | None = None,
 ) -> dict:
-    ranked = retrieval.retrieve(vehicle_id=vehicle_id, question=query)
+    normalized = (intent or "").strip().lower()  # the model may emit 'Lookup'/'PROCEDURE'
+    mode = normalized if normalized in ("lookup", "procedure") else "auto"
+    ranked = retrieval.retrieve(vehicle_id=vehicle_id, question=query, mode=mode)
     sources: list[dict] = []
     excerpts: list[str] = []
     for i, (chunk, score) in enumerate(ranked, start=1):

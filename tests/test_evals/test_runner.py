@@ -46,7 +46,7 @@ class _FakeRetrieval:
     def __init__(self, by_question):
         self._by_question = by_question
 
-    def retrieve(self, vehicle_id, question):
+    def retrieve(self, vehicle_id, question, mode="auto"):
         return self._by_question[question]
 
 

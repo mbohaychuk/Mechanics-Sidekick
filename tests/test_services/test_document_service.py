@@ -78,6 +78,58 @@ def test_add_document_creates_record_copies_file_and_stores_chunks(db_session, v
     assert json.loads(chunks[0].embedding_json) == [0.1, 0.2, 0.3]
 
 
+def _draw_table(page, header, rows, x0=60, top=120, col_w=170, dy=24):
+    grid = [header, *rows]
+    xs = [x0 + i * col_w for i in range(len(header) + 1)]
+    bottom = top + dy * len(grid)
+    for x in xs:
+        page.draw_line((x, top), (x, bottom))
+    y = top
+    for _ in range(len(grid) + 1):
+        page.draw_line((xs[0], y), (xs[-1], y))
+        y += dy
+    for r, cells in enumerate(grid):
+        for c, cell in enumerate(cells):
+            page.insert_text((xs[c] + 4, top + dy * r + 16), str(cell), fontsize=11)
+
+
+def test_real_pipeline_keeps_a_table_inline_in_one_chunk(db_session, vehicle, tmp_path):
+    # End-to-end through the REAL PDFService + StructuredChunkingService (only embeddings mocked):
+    # a bordered torque table's cells must land together in one chunk — inline, not split, not dropped.
+    pdf_path = tmp_path / "torque.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((60, 60), "WHEEL TORQUE SPECIFICATIONS", fontsize=14)
+    _draw_table(page, header=["Fastener", "Torque (lb-ft)"],
+                rows=[["Front lug nut", "150"], ["Rear lug nut", "150"]])
+    doc.save(str(pdf_path))
+    doc.close()
+
+    mock_embedding = MagicMock(spec=EmbeddingService)
+    mock_embedding.embed_texts.side_effect = lambda texts: [[0.1, 0.2] for _ in texts]
+
+    svc = DocumentService(
+        doc_repo=DocumentRepository(db_session),
+        chunk_repo=ChunkRepository(db_session),
+        pdf_service=PDFService(),
+        # tiny chunk_size so that WITHOUT the atomic rule the ~14-word table would be sliced apart —
+        # this makes the "kept whole" assertion falsifiable end-to-end, not trivially true.
+        chunking_service=StructuredChunkingService(chunk_size=4, chunk_overlap=1),
+        contextualization_service=MagicMock(spec=ContextualizationService, **{"generate_context.return_value": ""}),
+        embedding_service=mock_embedding,
+        docs_dir=str(tmp_path / "docs"),
+    )
+    svc.add_document(vehicle_id=vehicle.id, pdf_path=str(pdf_path))
+    db_session.flush()
+
+    chunks = ChunkRepository(db_session).list_by_vehicle(vehicle.id)
+    holding = [c for c in chunks if "Front lug nut" in c.content]
+    assert len(holding) == 1  # the table's cells are kept together, not scattered across chunks
+    content = holding[0].content
+    # the whole table (header + both rows) survives in that single chunk despite chunk_size=4
+    assert all(t in content for t in ["Fastener", "Front lug nut", "150", "Rear lug nut"])
+
+
 def test_large_doc_skips_contextualization_batches_embeddings_and_tracks_progress(
     db_session, vehicle, sample_pdf, tmp_path
 ):

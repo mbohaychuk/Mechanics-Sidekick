@@ -11,7 +11,7 @@ class FakeRetrieval:
     def __init__(self, score):
         self._score = score
 
-    def retrieve(self, vehicle_id, question):
+    def retrieve(self, vehicle_id, question, mode="auto"):
         chunk = type("C", (), {"document_id": 1, "page_number": 142, "content": "Lean code fix."})()
         return [(chunk, self._score)]
 

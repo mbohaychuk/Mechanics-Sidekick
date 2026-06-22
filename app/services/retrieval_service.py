@@ -25,19 +25,23 @@ class RetrievalService:
         self._hybrid_search = hybrid_search
         self._rrf_k = rrf_k
 
-    def retrieve(self, vehicle_id: int, question: str) -> list[tuple[DocumentChunk, float]]:
+    def retrieve(
+        self, vehicle_id: int, question: str, mode: str = "auto"
+    ) -> list[tuple[DocumentChunk, float]]:
         """Embed the question, score this vehicle's chunks, return top_k.
 
-        With both hybrid and reranker off (default) this is the original dense path, byte-identical
-        to before. Otherwise a candidate pool is built — dense cosine, optionally fused with BM25
-        keyword ranks via RRF — then optionally reranked, then truncated to top_k. The returned
-        (chunk, cosine) tuples are only ever reordered; the float stays a cosine similarity.
+        `mode` is query-adaptive routing (set by the agent from the user's intent): a `"lookup"`
+        query (a spec / value / code) skips the cross-encoder reranker, which is semantic and buries
+        lexically-exact spec/table matches; a `"procedure"` (or default `"auto"`) query is reranked,
+        which is where the cross-encoder helps. The returned (chunk, cosine) tuples are only ever
+        reordered; the float stays a cosine similarity.
         """
         candidates = self._chunk_repo.list_by_vehicle(vehicle_id)
         if not candidates:
             return []
         query_vec = self._embedding_service.embed_query(question)
-        if not self._hybrid_search and self._reranker is None:
+        apply_rerank = self._reranker is not None and mode != "lookup"
+        if not self._hybrid_search and not apply_rerank:
             return rank_chunks(query_vec=query_vec, chunks=candidates, top_k=self._top_k)
 
         cosine_scored = rank_chunks(query_vec=query_vec, chunks=candidates, top_k=len(candidates))
@@ -46,6 +50,6 @@ class RetrievalService:
             pool = rank_fusion(cosine_scored, bm25_ids, self._rrf_k)[: self._rerank_candidates]
         else:
             pool = cosine_scored[: self._rerank_candidates]
-        if self._reranker is not None:
+        if apply_rerank:
             pool = self._reranker.rerank(question, pool)
         return pool[: self._top_k]
