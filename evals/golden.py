@@ -8,7 +8,7 @@ label set would make every downstream metric lie.
 import json
 from pathlib import Path
 
-VALID_TYPES = {"exact_token", "conceptual", "paraphrase"}
+VALID_TYPES = {"exact_token", "conceptual", "paraphrase", "table_lookup"}
 
 
 def load_golden(path: str) -> list[dict]:

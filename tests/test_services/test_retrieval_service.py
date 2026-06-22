@@ -123,3 +123,5 @@ def test_retrieve_hybrid_promotes_bm25_match_over_cosine(db_session, vehicle_wit
 
     assert [c.content for c, _ in results] == ["Minimum rotor thickness 20mm", "Torque spec 129 Nm"]
     assert [s for _, s in results] == [pytest.approx(0.0), pytest.approx(1.0)]  # cosines preserved
+
+
