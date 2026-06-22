@@ -195,8 +195,9 @@ Running it on a real **264 MB / 13k‑page Ford F‑150 manual** (~11k chunks) w
 - **Dense retrieval already finds exact tokens.** It lands a relevant chunk in the top‑5 for *every* literal‑code query — so the headroom was **ranking** (hit@1 was only 0.40), not exact‑token recall.
 - **A cross‑encoder reranker** (`RERANK_PROVIDER=local`) over the dense top‑40 lifts **hit@5 0.84 → 0.96** and recovers chunks dense missed entirely.
 - **BM25 hybrid** (`HYBRID_SEARCH=true`, SQLite FTS5 + Reciprocal Rank Fusion) gives the best **hit@1 (0.56)** — *after* the harness caught a real bug: OR‑ing stopwords into the FTS query flooded BM25 with common‑word matches and pushed the right DTC chunk out of the candidate pool. The FTS tokenizer also preserves `.`, `-`, `/` so `P0420` / `M12x1.5` index as whole tokens.
+- **The reranker is two‑faced — so the agent routes around it.** A second, table‑focused golden set (fluid capacities, torque specs) showed the cross‑encoder that *makes* procedures (hit@5 **0.96**) *craters* spec‑table lookups (**0.79 → 0.58**), because it is semantic and buries lexically‑exact matches. Rather than force one config on both, the agent tags each search with an `intent` (`lookup` \| `procedure`) and retrieval reranks **only** procedures — getting **0.79 on lookups *and* 0.96 on procedures**. Explicit table *extraction* (separate chunks / LLM summaries) was tried and **reverted** — both regressed retrieval; what shipped is just keeping tables whole during chunking (no corpus bloat) plus the routing.
 
-Both are **off by default** and opt‑in; the harness is what decides whether each earns being enabled.
+The reranker is **off by default** and opt‑in; the harness is what decides whether each lever earns being enabled.
 
 ---
 

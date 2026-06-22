@@ -60,9 +60,6 @@ hit@5 = a relevant chunk in the top-5; MRR = rank of the first relevant chunk.
 | + 1A reranker (cross-encoder, top-40→5) | 0.480 | **0.960** | 0.659 | 1.000 | 0.875 | 1.000 |
 | + 1A BM25 hybrid (FTS5+RRF) | **0.560** | 0.880 | **0.691** | 0.800 | 0.875 | 0.917 |
 | + 1A hybrid + reranker | 0.520 | 0.880 | 0.642 | 0.800 | 0.875 | 0.917 |
-| + 1B table-aware | | | | | | |
-| + 1C sectional context | | | | | | |
-| + 2D parent-child | | | | | | |
 
 **Baseline finding (this reframed the redesign).** Dense retrieval is *not* broken on exact tokens
 — it lands a relevant chunk in the top-5 for **every** literal-code query. The real headroom is
@@ -76,8 +73,31 @@ first:* OR-ing stopwords flooded BM25 with common-word matches and **regressed e
 0.60**; dropping function words restored it to 0.80. Even fixed, hybrid slightly regresses exact-token
 recall (1.00→0.80) and **does not stack with the reranker** (combined is within noise of either alone).
 
-**Honest read (n=25, deltas this small are noisy).** No single config dominates: **reranker = best
-recall (hit@5 0.96, no regression); BM25 hybrid = best rank-1 precision (hit@1 0.56 / MRR 0.69) but
-trades a little exact-token recall.** Both are off in the base install. The senior call is to ship the
-reranker as the recommended config and keep hybrid opt-in + documented, rather than stack complexity
-that doesn't clearly pay — and to grow the golden set before trusting finer differences.
+## Table lookups + query-adaptive routing (the 1B outcome)
+
+A second, **table-focused** golden set (`golden_questions_tables.json`, 24 verified questions: fluid
+capacities, fluid types, torque specs) exposed the central tension — **the reranker that *makes*
+procedures *craters* spec-table lookups:**
+
+| Question type (atomic-table corpus, vehicle 4) | dense / `lookup` mode | reranker / `procedure` mode |
+|---|---|---|
+| **table lookups** (n=24) | **0.792** | 0.583 |
+| **procedures + DTC** (n=25) | 0.840 | **0.960** |
+
+No single config wins both. The fix is **query-adaptive routing**: the agent tags each `search_manuals`
+call with `intent` (`lookup` \| `procedure`), and `RetrievalService.retrieve(mode=…)` skips the reranker
+for lookups (dense already lands spec tables at 0.79) and applies it for procedures (0.96). Routed, the
+system gets **0.792 on lookups *and* 0.960 on procedures** — beating all-reranker (0.58 lookups) and
+all-dense (0.84 procedures). The agent classified lookup-vs-procedure at **100%** on these 49 questions.
+
+**What was tried and reverted.** Explicit table *extraction* (separate per-row chunks, then LLM table
+summaries) was implemented and measured — both **regressed** retrieval (summaries drop the exact value;
+per-row chunks doubled the corpus to ~19k and flooded the reranker). An exact-match BM25 "floor" was
+also a no-op (RRF hybrid already subsumes it). All reverted. What shipped instead is much smaller:
+**keep tables whole during normal chunking** (use `find_tables` bboxes only, so a window never cuts a
+table and a table's bold cells aren't read as headings — corpus *shrinks* to 10.4k) **+ routing.**
+
+**Honest read (n=49, deltas under ~0.08 are noisy).** Recommended config = **reranker on +
+query-adaptive routing** (rerank procedures, plain dense for lookups). The reranker is opt-in (needs
+`uv sync --group rerank`); routing is automatic once it is enabled. Grow the golden set before trusting
+finer differences.
