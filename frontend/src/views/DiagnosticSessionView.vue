@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useDiagnosticSession } from '@/composables/useDiagnosticSession'
 import LiveFocusChart from '@/components/LiveFocusChart.vue'
 import DiagnosticStep from '@/components/DiagnosticStep.vue'
+import DiagnosticCoach from '@/components/DiagnosticCoach.vue'
 import CommentaryItem from '@/components/CommentaryItem.vue'
 import HealthReport from '@/components/HealthReport.vue'
 
@@ -14,15 +15,26 @@ const d = useDiagnosticSession(vehicleId)
 onMounted(() => d.loadPastReports())
 onUnmounted(() => d.stop())
 
-const running = computed(() => d.status.value === 'running' || d.status.value === 'connecting')
+const running = computed(() =>
+  ['connecting', 'running', 'generating'].includes(d.status.value),
+)
+const PHASE: Record<string, string> = {
+  idle: 'Ready', connecting: 'Connecting…', running: 'Running — follow the steps',
+  generating: 'Generating report…', complete: 'Complete', error: 'Error',
+}
+const phaseLabel = computed(() => PHASE[d.status.value] ?? d.status.value)
 
 function fmtDate(iso: string): string {
   const dt = new Date(iso)
   return Number.isNaN(dt.getTime()) ? iso : dt.toLocaleString()
 }
-function statusClass(s: 'good' | 'fair' | 'poor' | null): string {
-  return s ? { good: 'text-success', fair: 'text-warning', poor: 'text-danger' }[s] : ''
+function statusClass(s: 'good' | 'fair' | 'poor' | 'incomplete' | null): string {
+  return s ? { good: 'text-success', fair: 'text-warning', poor: 'text-danger', incomplete: 'text-muted' }[s] : ''
 }
+const activeStep = computed(() => {
+  const s = d.steps.value[d.currentIndex.value]
+  return s && s.state === 'active' ? s : null
+})
 const vitalNames = computed(() => Object.keys(d.latest))
 const focusSeries = computed(() =>
   vitalNames.value.slice(0, 4).map((name) => ({ name, points: d.series[name] ?? [] })),
@@ -50,7 +62,7 @@ function toggle() {
       <div>
         <h1 class="font-mono text-sm font-semibold uppercase tracking-widest text-text">Diagnostic copilot</h1>
         <p class="font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">
-          VID <span class="text-muted/70">{{ vehicleId }}</span> · {{ d.status.value }}
+          VID <span class="text-muted/70">{{ vehicleId }}</span> · <span class="text-muted/70">{{ phaseLabel }}</span>
         </p>
       </div>
       <button
@@ -85,6 +97,23 @@ function toggle() {
 
       <!-- Right: copilot feed + report -->
       <section class="space-y-4">
+        <DiagnosticCoach
+          v-if="activeStep"
+          :label="activeStep.label" :instruction="activeStep.instruction" :progress="d.progress.value"
+        />
+
+        <div
+          v-else-if="d.status.value === 'generating'"
+          data-test="generating"
+          class="flex items-center gap-3 rounded-card border border-accent/40 bg-surface-2 p-5"
+        >
+          <span class="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true" />
+          <div>
+            <p class="font-mono text-[0.6rem] uppercase tracking-widest text-accent">Generating health report</p>
+            <p class="mt-1 text-sm text-muted">Steps complete — analyzing the captured data and writing your report…</p>
+          </div>
+        </div>
+
         <div class="overflow-hidden rounded-card border border-border bg-surface">
           <div class="border-b border-border/50 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">Guided steps</div>
           <DiagnosticStep

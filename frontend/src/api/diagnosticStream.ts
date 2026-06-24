@@ -7,6 +7,10 @@ export type DiagnosticStreamEvent =
   | { type: 'sample'; seq: number; t: number; hz: number; values: Record<string, LiveValue | null> }
   | { type: 'step'; index: number; total: number; id: string; label: string;
       instruction: string; state: 'active' | 'done' | 'skipped'; adhoc: boolean }
+  | { type: 'step_progress'; index: number; id: string; pid: string; value: number | null;
+      target_low: number | null; target_high: number | null; in_range: boolean;
+      dwell_elapsed_s: number; dwell_required_s: number }
+  | { type: 'generating' }
   | { type: 'commentary'; text: string; t: number }
   | { type: 'anomaly'; system: string; severity: string; pid: string; detail: string }
   | ({ type: 'report' } & DiagnosticReport)

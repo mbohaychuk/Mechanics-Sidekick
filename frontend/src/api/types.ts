@@ -129,7 +129,7 @@ export interface DiagnosticFinding {
 }
 
 export interface DiagnosticReport {
-  overall_status: 'good' | 'fair' | 'poor'
+  overall_status: 'good' | 'fair' | 'poor' | 'incomplete'
   summary: string
   findings: DiagnosticFinding[]
 }
@@ -140,7 +140,7 @@ export interface DiagnosticReportSummary {
   protocol_name: string
   started_utc: string
   ended_utc: string | null
-  overall_status: 'good' | 'fair' | 'poor' | null
+  overall_status: 'good' | 'fair' | 'poor' | 'incomplete' | null
   summary: string | null
 }
 

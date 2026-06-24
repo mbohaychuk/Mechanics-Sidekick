@@ -171,6 +171,33 @@ class ProtocolRunner:
             return self._complete(seq, "skipped")
         return None
 
+    def progress(self, values: dict, t_ms: int) -> dict | None:
+        """Live status of the active *target* step for the guided-coach UI: current value vs
+        the target band, whether it's in range, and how much of the required dwell has accrued.
+        Read-only — `offer()` owns dwell-state mutation. None for instruction-only steps or when
+        the protocol is complete (nothing to coach toward)."""
+        if self.is_complete():
+            return None
+        step = self._steps[self._idx]
+        if step.target is None:
+            return None
+        val = _num(values, step.target.pid)
+        in_range = val is not None and step.target.in_range(val)
+        dwell_elapsed = 0.0
+        if in_range and self._dwell_start_ms is not None:
+            dwell_elapsed = max(0.0, (t_ms - self._dwell_start_ms) / 1000.0)
+        return {
+            "index": self._idx,
+            "id": step.id,
+            "pid": step.target.pid,
+            "value": val,
+            "target_low": step.target.low,
+            "target_high": step.target.high,
+            "in_range": in_range,
+            "dwell_elapsed_s": round(dwell_elapsed, 1),
+            "dwell_required_s": step.min_dwell_s,
+        }
+
     def skip(self) -> StepState | None:
         if self.is_complete():
             return None

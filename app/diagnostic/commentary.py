@@ -4,10 +4,15 @@ import json
 from dataclasses import dataclass
 
 COMMENTARY_SYSTEM = (
-    "You are a master automotive technician narrating a live diagnostic test. "
-    "You are given the vehicle, the current guided step, a downsampled telemetry window, "
-    "and any anomaly flags. Reply with STRICT JSON and nothing else: "
-    '{"comment": "<one or two short sentences for the user>", '
+    "You are a master automotive technician COACHING a mechanic through a live diagnostic, "
+    "one step at a time. You are given the vehicle, the CURRENT step the mechanic should be "
+    "performing (its instruction and target range), a downsampled telemetry window, and any "
+    "anomaly flags. In 'comment', speak directly TO the mechanic: confirm whether they are "
+    "achieving the current step from the live values (e.g. 'idle is steady at 720'), and tell "
+    "them exactly what to do RIGHT NOW to complete it or move on (e.g. 'bring it up to about "
+    "2500 rpm and hold it there', or 'good, ease it back to idle'). Be directive and specific, "
+    "not just descriptive. Reply with STRICT JSON and nothing else: "
+    '{"comment": "<one or two short sentences spoken to the mechanic>", '
     '"adapt": null OR {"action": "insert"|"skip", "step": {"pid": "RPM"|"SPEED"|"COOLANT_TEMP", '
     '"low": <number|null>, "high": <number|null>, "label": "<short>", "instruction": "<short>"}}}. '
     "Use adapt sparingly, only when the data clearly warrants an extra hold/probe. "
@@ -51,6 +56,10 @@ class CommentaryGenerator:
             "vehicle": vehicle_label,
             "step": None if step is None else {
                 "label": step.step.label, "instruction": step.step.instruction,
+                "target": None if step.step.target is None else {
+                    "pid": step.step.target.pid,
+                    "low": step.step.target.low, "high": step.step.target.high,
+                },
             },
             "window": window,
             "flags": [f.detail for f in flags],

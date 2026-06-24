@@ -63,7 +63,11 @@ class FakeCommentary:
 
 
 class FakeReportBuilder:
+    def __init__(self):
+        self.called = False
+
     def build(self, vehicle_label, good_systems, diagnoses):
+        self.called = True
         findings = [Finding(s, "good", o) for s, o in good_systems.items()] + list(diagnoses)
         return HealthReport(overall_status="fair", summary="done", findings=findings)
 
@@ -125,7 +129,9 @@ def test_runner_emits_full_event_sequence_and_persists_report():
     assert "sample" in types
     assert "step" in types        # idle step completes (dwell 0)
     assert "anomaly" in types     # LTFT +15% lean flagged
+    assert "generating" in types  # the report-generation phase is announced...
     assert "report" in types
+    assert types.index("generating") < types.index("report")  # ...before the report arrives
     assert types[-1] == "done"
     assert runner._manager.unsubscribed is True  # unsubscribe ran
 
@@ -140,5 +146,111 @@ def test_runner_emits_full_event_sequence_and_persists_report():
         assert rows[0].status == "completed"
         assert json.loads(rows[0].report_json)["summary"] == "done"
         assert rows[0].live_session_id is not None
+    finally:
+        sess.close()
+
+
+def test_runner_streams_step_progress_while_holding_a_target():
+    # The guided coach needs live per-sample feedback while the operator works toward a step
+    # (e.g. holding 2500 rpm), not just a checkmark when it completes.
+    factory = _factory()
+    s = factory()
+    try:
+        v = Vehicle(year=2015, make="Ford", model="F-150", engine="5.0L", vin="X")
+        s.add(v)
+        s.commit()
+        vid = v.id
+    finally:
+        s.close()
+
+    settings = Settings(_env_file=None)
+    settings.diag_commentary_interval_s = 999.0  # keep commentary out of this test
+    protocol = DiagnosticProtocol(name="t", steps=[
+        Step(id="rev_2500", label="Rev", instruction="hold 2500",
+             target=StepTarget("RPM", 2300, 2700), capture_pids=["RPM"],
+             min_dwell_s=10.0, timeout_s=60.0),  # long dwell so the step stays active
+    ])
+    samples = [
+        {"type": "sample", "seq": 1, "t": 0, "hz": 1.0, "values": {"RPM": {"value": 1500, "unit": "rpm"}}},
+        {"type": "sample", "seq": 2, "t": 1000, "hz": 1.0, "values": {"RPM": {"value": 2500, "unit": "rpm"}}},
+        {"type": "sample", "seq": 3, "t": 2000, "hz": 1.0, "values": {"RPM": {"value": 2500, "unit": "rpm"}}},
+    ]
+
+    def diagnoser_factory(session):
+        class _D:
+            def diagnose(self, flag, label):
+                return Finding(flag.system, flag.severity, flag.detail)
+        return _D()
+
+    runner = DiagnosticSessionRunner(
+        manager=FakeManager(factory, samples), session_factory=factory, vehicle_id=vid,
+        vehicle_label="2015 Ford F-150", protocol=protocol, commentary=FakeCommentary(),
+        diagnoser_factory=diagnoser_factory, report_builder=FakeReportBuilder(), settings=settings,
+    )
+
+    async def drive():
+        return [ev async for ev in runner.run()]
+
+    events = asyncio.run(drive())
+    progress = [e for e in events if e["type"] == "step_progress"]
+    assert len(progress) == 3
+    assert progress[0]["value"] == 1500 and progress[0]["in_range"] is False
+    assert progress[1]["value"] == 2500 and progress[1]["in_range"] is True
+    assert progress[1]["dwell_elapsed_s"] == 0.0   # just entered the band
+    assert progress[2]["dwell_elapsed_s"] == 1.0   # held one more second
+    assert progress[2]["dwell_required_s"] == 10.0
+
+
+def test_runner_reports_incomplete_when_no_step_is_completed():
+    # If the operator never holds a single guided step (engine off, scanner dropped, etc.), the
+    # session must report "incomplete" — not default to a falsely reassuring "good" — and must NOT
+    # spend an LLM call interpreting data that doesn't exist.
+    factory = _factory()
+    s = factory()
+    try:
+        v = Vehicle(year=2015, make="Ford", model="F-150", engine="5.0L", vin="X")
+        s.add(v)
+        s.commit()
+        vid = v.id
+    finally:
+        s.close()
+
+    settings = Settings(_env_file=None)
+    settings.diag_commentary_interval_s = 999.0
+    protocol = DiagnosticProtocol(name="t", steps=[
+        Step(id="rev", label="Rev", instruction="hold 2500", target=StepTarget("RPM", 2300, 2700),
+             capture_pids=["RPM"], min_dwell_s=10.0, timeout_s=600.0),  # never reached/timed out
+    ])
+    samples = [  # RPM never enters the band → step stays active → disconnect → no completed step
+        {"type": "sample", "seq": 1, "t": 0, "hz": 1.0, "values": {"RPM": {"value": 700, "unit": "rpm"}}},
+        {"type": "sample", "seq": 2, "t": 1000, "hz": 1.0, "values": {"RPM": {"value": 720, "unit": "rpm"}}},
+    ]
+
+    def diagnoser_factory(session):
+        class _D:
+            def diagnose(self, flag, label):
+                return Finding(flag.system, flag.severity, flag.detail)
+        return _D()
+
+    builder = FakeReportBuilder()
+    runner = DiagnosticSessionRunner(
+        manager=FakeManager(factory, samples), session_factory=factory, vehicle_id=vid,
+        vehicle_label="2015 Ford F-150", protocol=protocol, commentary=FakeCommentary(),
+        diagnoser_factory=diagnoser_factory, report_builder=builder, settings=settings,
+    )
+
+    async def drive():
+        return [ev async for ev in runner.run()]
+
+    events = asyncio.run(drive())
+    report_ev = next(e for e in events if e["type"] == "report")
+    assert report_ev["overall_status"] == "incomplete"
+    assert builder.called is False  # no LLM report when there's no completed step to interpret
+
+    sess = factory()
+    try:
+        row = DiagnosticSessionRepository(sess).list_by_vehicle(vid)[0]
+        assert row.overall_status == "incomplete"
+        assert row.status == "completed"  # the session ran to the end; the data was just thin
     finally:
         sess.close()

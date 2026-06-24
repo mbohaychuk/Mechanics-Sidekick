@@ -54,6 +54,49 @@ describe('useDiagnosticSession', () => {
     expect(d.status.value).toBe('complete')
   })
 
+  it('tracks live step_progress and clears it at each step boundary', async () => {
+    const d = useDiagnosticSession(1)
+    d.start()
+    await flushPromises()
+    handlers.current!({
+      type: 'session', diagnostic_session_id: 1, live_session_id: 1,
+      protocol: [{ id: 'rev_2500', label: 'Rev', instruction: 'hold 2500' }],
+    })
+    handlers.current!({ type: 'step', index: 0, total: 1, id: 'rev_2500', label: 'Rev', instruction: 'hold 2500', state: 'active', adhoc: false })
+    expect(d.progress.value).toBeNull()
+
+    handlers.current!({
+      type: 'step_progress', index: 0, id: 'rev_2500', pid: 'RPM', value: 2150,
+      target_low: 2300, target_high: 2700, in_range: false, dwell_elapsed_s: 0, dwell_required_s: 8,
+    })
+    expect(d.progress.value?.value).toBe(2150)
+    expect(d.progress.value?.in_range).toBe(false)
+
+    handlers.current!({
+      type: 'step_progress', index: 0, id: 'rev_2500', pid: 'RPM', value: 2500,
+      target_low: 2300, target_high: 2700, in_range: true, dwell_elapsed_s: 3, dwell_required_s: 8,
+    })
+    expect(d.progress.value?.in_range).toBe(true)
+    expect(d.progress.value?.dwell_elapsed_s).toBe(3)
+
+    // a step boundary clears the live gauge
+    handlers.current!({ type: 'step', index: 0, total: 1, id: 'rev_2500', label: 'Rev', instruction: 'hold 2500', state: 'done', adhoc: false })
+    expect(d.progress.value).toBeNull()
+  })
+
+  it('enters an explicit generating phase before the report, then completes', async () => {
+    const d = useDiagnosticSession(1)
+    d.start()
+    await flushPromises()
+    handlers.current!({ type: 'generating' })
+    expect(d.status.value).toBe('generating')
+
+    handlers.current!({ type: 'report', overall_status: 'incomplete', summary: 'thin data', findings: [] })
+    handlers.current!({ type: 'done' })
+    expect(d.status.value).toBe('complete')
+    expect(d.report.value?.overall_status).toBe('incomplete')
+  })
+
   it('goes to error on an error event', async () => {
     const d = useDiagnosticSession(1)
     d.start()

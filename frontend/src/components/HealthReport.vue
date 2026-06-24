@@ -8,6 +8,7 @@ const overallClass = computed(() => ({
   good: 'border-success/40 bg-success/10 text-success',
   fair: 'border-warning/40 bg-warning/10 text-warning',
   poor: 'border-danger/40 bg-danger/10 text-danger',
+  incomplete: 'border-muted/40 bg-muted/10 text-muted',
 }[props.report.overall_status]))
 
 function sources(evidence: DiagnosticFinding['evidence']): { filename?: string; page?: number }[] {

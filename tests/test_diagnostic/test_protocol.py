@@ -98,3 +98,34 @@ def test_safe_adhoc_step_validates_vocabulary_and_bounds():
 def test_safe_adhoc_step_rejects_non_numeric_bound():
     # A malformed LLM directive with a string bound must return None, not raise ValueError.
     assert safe_adhoc_step({"action": "insert", "step": {"pid": "RPM", "low": "abc"}}) is None
+
+
+def test_progress_reports_live_value_target_and_dwell():
+    # The guided-coach UI needs per-sample status: where the value is vs the target band,
+    # whether it's in range, and how much of the required dwell has accrued.
+    step = Step(id="rev", label="Rev", instruction="rev", target=StepTarget("RPM", 2300, 2700),
+                min_dwell_s=4.0, timeout_s=30.0)
+    runner = ProtocolRunner(DiagnosticProtocol_single(step), max_adhoc=0)
+
+    runner.offer(_sample("RPM", 1500), seq=1, t_ms=0)            # below band
+    p = runner.progress(_sample("RPM", 1500), t_ms=0)
+    assert p["pid"] == "RPM" and p["value"] == 1500
+    assert p["target_low"] == 2300 and p["target_high"] == 2700
+    assert p["in_range"] is False
+    assert p["dwell_elapsed_s"] == 0.0 and p["dwell_required_s"] == 4.0
+
+    runner.offer(_sample("RPM", 2500), seq=2, t_ms=1000)         # enters band → dwell starts
+    runner.offer(_sample("RPM", 2500), seq=3, t_ms=3000)         # 2s held
+    p = runner.progress(_sample("RPM", 2500), t_ms=3000)
+    assert p["in_range"] is True
+    assert p["dwell_elapsed_s"] == 2.0
+
+
+def test_progress_is_none_for_instruction_only_step_and_when_complete():
+    step = Step(id="warm", label="Warm", instruction="idle", target=None,
+                min_dwell_s=0.0, timeout_s=5.0)
+    runner = ProtocolRunner(DiagnosticProtocol_single(step), max_adhoc=0)
+    assert runner.progress(_sample("RPM", 700), t_ms=0) is None   # no target → no gauge
+    runner.skip()
+    assert runner.is_complete()
+    assert runner.progress(_sample("RPM", 700), t_ms=0) is None   # nothing active

@@ -5,7 +5,7 @@ import type { DiagnosticReport, DiagnosticReportSummary, LiveValue } from '@/api
 
 const WINDOW = 120
 
-type DiagStatus = 'idle' | 'connecting' | 'running' | 'complete' | 'error'
+type DiagStatus = 'idle' | 'connecting' | 'running' | 'generating' | 'complete' | 'error'
 
 interface StepView {
   id: string
@@ -15,12 +15,25 @@ interface StepView {
   adhoc: boolean
 }
 
+export interface StepProgress {
+  index: number
+  id: string
+  pid: string
+  value: number | null
+  target_low: number | null
+  target_high: number | null
+  in_range: boolean
+  dwell_elapsed_s: number
+  dwell_required_s: number
+}
+
 export function useDiagnosticSession(vehicleId: number) {
   const status = ref<DiagStatus>('idle')
   const detail = ref('')
   const steps = ref<StepView[]>([])
   const currentIndex = ref(-1)
   const commentary = ref<{ text: string; t: number }[]>([])
+  const progress = ref<StepProgress | null>(null)
   const anomalies = ref<{ system: string; severity: string; detail: string }[]>([])
   const report = ref<DiagnosticReport | null>(null)
   const pastReports = ref<DiagnosticReportSummary[]>([])
@@ -40,6 +53,7 @@ export function useDiagnosticSession(vehicleId: number) {
       if (event.vin_mismatch) detail.value = event.vin_mismatch
     } else if (event.type === 'step') {
       currentIndex.value = event.index
+      progress.value = null  // step boundary — clear the live gauge until the next sample
       const existing = steps.value[event.index]
       const view: StepView = {
         id: event.id, label: event.label, instruction: event.instruction,
@@ -47,6 +61,12 @@ export function useDiagnosticSession(vehicleId: number) {
       }
       if (existing) steps.value[event.index] = view
       else steps.value.splice(event.index, 0, view)
+    } else if (event.type === 'step_progress') {
+      progress.value = {
+        index: event.index, id: event.id, pid: event.pid, value: event.value,
+        target_low: event.target_low, target_high: event.target_high, in_range: event.in_range,
+        dwell_elapsed_s: event.dwell_elapsed_s, dwell_required_s: event.dwell_required_s,
+      }
     } else if (event.type === 'sample') {
       for (const [pid, v] of Object.entries(event.values)) {
         latest[pid] = v
@@ -56,6 +76,9 @@ export function useDiagnosticSession(vehicleId: number) {
           if (buf.length > WINDOW) buf.splice(0, buf.length - WINDOW)
         }
       }
+    } else if (event.type === 'generating') {
+      status.value = 'generating'  // phase 3: steps done, building the report
+      progress.value = null
     } else if (event.type === 'commentary') {
       commentary.value.push({ text: event.text, t: event.t })
     } else if (event.type === 'anomaly') {
@@ -80,6 +103,7 @@ export function useDiagnosticSession(vehicleId: number) {
     anomalies.value = []
     report.value = null
     viewedReport.value = null
+    progress.value = null
     currentIndex.value = -1
     for (const k of Object.keys(latest)) delete latest[k]
     for (const k of Object.keys(series)) delete series[k]
@@ -121,6 +145,6 @@ export function useDiagnosticSession(vehicleId: number) {
 
   return {
     status, detail, steps, currentIndex, commentary, anomalies, report, latest, series,
-    pastReports, viewedReport, pastError, start, stop, loadPastReports, viewReport,
+    progress, pastReports, viewedReport, pastError, start, stop, loadPastReports, viewReport,
   }
 }

@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from app.diagnostic.anomaly import evaluate, evaluate_window
 from app.diagnostic.commentary import summarize_window
 from app.diagnostic.protocol import ProtocolRunner, safe_adhoc_step
-from app.diagnostic.report import report_to_json
+from app.diagnostic.report import HealthReport, report_to_json
 from app.repositories.diagnostic_session_repository import DiagnosticSessionRepository
 from app.repositories.live_sample_repository import LiveSampleRepository
 
@@ -84,6 +84,10 @@ class DiagnosticSessionRunner:
                     nxt = self._runner.current()
                     if nxt is not None:
                         yield self._step_event(nxt)
+                else:
+                    progress = self._runner.progress(values, t_ms)
+                    if progress is not None:
+                        yield {"type": "step_progress", **progress}
 
                 for flag in evaluate(values, self._settings):
                     key = f"{flag.system}:{flag.pid}"
@@ -137,6 +141,7 @@ class DiagnosticSessionRunner:
                     yield self._step_event(cur)
 
     async def _finalize(self, loop, diag_id) -> AsyncIterator[dict]:
+        yield {"type": "generating"}  # phase 3: announce report generation before the LLM call
         report_json = await loop.run_in_executor(None, self._build_and_persist, diag_id)
         yield {"type": "report", "overall_status": report_json["overall_status"],
                "summary": report_json["summary"], "findings": report_json["findings"]}
@@ -172,6 +177,26 @@ class DiagnosticSessionRunner:
                     {"seq": s.seq, "t": s.t_offset_ms, "values": json.loads(s.values_json)}
                     for s in LiveSampleRepository(session).list_by_session(live_session_id)
                 ]
+
+            # If not a single guided step was actually completed, the operator never held a test
+            # condition — there is no valid data to interpret. Report "incomplete" honestly (never
+            # a default "good"), and skip the LLM report call entirely.
+            if not any(s.state == "done" for s in self._runner.completed):
+                report = HealthReport(
+                    overall_status="incomplete",
+                    summary="The health check didn't complete a single guided step, so there isn't "
+                            "enough live data to assess the vehicle. Re-run with the engine running "
+                            "and hold each step until it's detected.",
+                    findings=[],
+                )
+                report_json = report_to_json(report)
+                DiagnosticSessionRepository(session).complete(
+                    diag_id, overall_status=report.overall_status, summary=report.summary,
+                    report_json=json.dumps(report_json),
+                    commentary_json=json.dumps(self._commentary_log),
+                )
+                session.commit()
+                return report_json
 
             good_systems, diagnoses = self._analyze(session, recorded)
             report = self._report_builder.build(self._vehicle_label, good_systems, diagnoses)
