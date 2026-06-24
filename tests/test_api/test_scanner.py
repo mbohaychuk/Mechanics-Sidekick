@@ -10,7 +10,7 @@ def test_scanner_status_reachable(api_client):
     class FakeHost:
         available = True
 
-        def call(self, name, args):
+        async def call_async(self, name, args):
             return '{"vin": "WAUZZZ", "protocol": "ISO 15765-4"}'
 
         def stop(self):
@@ -26,7 +26,7 @@ def test_scanner_status_server_up_but_scanner_unreachable(api_client):
     class FakeHost:
         available = True
 
-        def call(self, name, args):
+        async def call_async(self, name, args):
             return "[tool error] [UNABLE_TO_CONNECT] adapter not reachable at socket://localhost:35000"
 
         def stop(self):

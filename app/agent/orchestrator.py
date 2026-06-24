@@ -126,17 +126,30 @@ class AgentOrchestrator:
         if self._obd_host is not None and self._obd_host.available:
             tools.extend(self._obd_host.openai_tools())
         sources: list[dict] = []
+        tool_trail: list[str] = []
+        no_turn = False
 
         for _ in range(self._max_iters):
             turn = None
-            try:
-                for ev in self._provider.stream_turn(messages, tools):
-                    if ev["type"] == "token":
-                        yield ev
-                    elif ev["type"] == "turn":
-                        turn = ev["turn"]
-            except Exception:  # provider/network/rate-limit failure mid-turn
-                logger.exception("Provider failed mid-turn for job %s", job_id)
+            streamed = False
+            failed = False
+            for attempt in range(2):  # one guarded retry, only while nothing has streamed yet
+                try:
+                    for ev in self._provider.stream_turn(messages, tools):
+                        if ev["type"] == "token":
+                            streamed = True
+                            yield ev
+                        elif ev["type"] == "turn":
+                            turn = ev["turn"]
+                    break
+                except Exception:  # provider/network/rate-limit failure mid-turn
+                    if streamed or attempt == 1:
+                        logger.exception("Provider failed mid-turn for job %s", job_id)
+                        failed = True
+                        break
+                    # Nothing streamed yet — a transient blip is safe to retry once.
+                    logger.warning("Provider stream failed for job %s; retrying once", job_id)
+            if failed:
                 err = "The assistant was interrupted by a provider error before it could answer."
                 self._chat_repo.create(
                     job_id=job_id, role="assistant", content=err, sources_json=json.dumps(sources)
@@ -149,6 +162,10 @@ class AgentOrchestrator:
                 yield {"type": "done"}
                 return
             if turn is None:
+                logger.warning(
+                    "Provider stream produced no turn for job %s (empty/malformed response)", job_id
+                )
+                no_turn = True
                 break
 
             if turn.tool_calls:
@@ -167,6 +184,7 @@ class AgentOrchestrator:
                     }
                 )
                 for tc in turn.tool_calls:
+                    tool_trail.append(tc.name)
                     yield {"type": "tool_call", "name": tc.name, "arguments": tc.arguments}
                     result = self._execute(tc, vehicle)
                     sources.extend(result.get("sources", []))
@@ -185,11 +203,19 @@ class AgentOrchestrator:
             yield {"type": "done"}
             return
 
+        if no_turn:
+            detail = "empty_provider_response"
+        else:
+            logger.warning(
+                "Agent hit max_iters=%d for job %s without a final answer (tools=%s, sources=%d)",
+                self._max_iters, job_id, tool_trail, len(sources),
+            )
+            detail = "max_iterations_reached"
         fallback = "I was not able to complete this within the allowed number of steps."
         self._chat_repo.create(
             job_id=job_id, role="assistant", content=fallback, sources_json=json.dumps(sources)
         )
-        yield {"type": "error", "detail": "max_iterations_reached"}
+        yield {"type": "error", "detail": detail}
         yield {"type": "done"}
 
     def _execute(self, tc: ToolCall, vehicle) -> dict:

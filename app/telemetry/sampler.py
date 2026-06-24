@@ -106,8 +106,8 @@ class TelemetrySampler:
                     consecutive_errors, self._max_read_errors, str(exc)[:200],
                 )
                 if consecutive_errors >= self._max_read_errors:
-                    logger.error("live sampler giving up after %d consecutive read failures",
-                                 consecutive_errors)
+                    logger.error("live sampler giving up after %d consecutive read failures; "
+                                 "last error: %s", consecutive_errors, str(exc)[:200])
                     for sub in list(self._subscribers):
                         sub.offer({"type": "disconnected", "detail": str(exc)})
                     return

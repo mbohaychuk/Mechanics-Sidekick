@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from app.config import Settings
 from app.models.vehicle import Vehicle
@@ -8,6 +9,8 @@ from app.repositories.live_session_repository import LiveSessionRepository
 from app.telemetry.parse import LiveReadError, parse_live_data, parse_vin
 from app.telemetry.recorder import Recorder
 from app.telemetry.sampler import Subscriber, TelemetrySampler
+
+logger = logging.getLogger(__name__)
 
 
 class LiveSessionConflict(Exception):
@@ -41,10 +44,12 @@ class TelemetryManager:
         return call_live
 
     async def _vin_mismatch(self, vehicle_id: int) -> tuple[str | None, str | None]:
-        """Returns (scanner_vin, mismatch_detail). Non-blocking — never raises on read failure."""
+        """Returns (scanner_vin, mismatch_detail). Advisory only — never raises and never gates
+        session start; a slow/failed VIN read must not block subscribe for the full OBD timeout."""
         try:
-            scanner_vin = parse_vin(await self._host.call_async("get_vehicle_info", {}))
-        except LiveReadError:
+            raw = await asyncio.wait_for(self._host.call_async("get_vehicle_info", {}), timeout=5.0)
+            scanner_vin = parse_vin(raw)
+        except (LiveReadError, asyncio.TimeoutError, Exception):  # noqa: BLE001 — advisory probe
             return None, None
         session = self._session_factory()
         try:
@@ -104,19 +109,26 @@ class TelemetryManager:
             self._sampler.unsubscribe(sub)
             if self._sampler.subscriber_count > 0:
                 return
+            # Clear all manager state FIRST, then tear down best-effort. If stop()/commit raises
+            # (locked DB, dead task), the manager must still release cleanly — otherwise
+            # active_vehicle_id stays set and every later live/diagnostic request 409s forever.
             achieved = self._sampler.achieved_hz
             status = "error" if self._sampler.error else "ended"
-            await self._sampler.stop()
-            written = await self._recorder.stop() if self._recorder else 0
-            session = self._session_factory()
-            try:
-                LiveSessionRepository(session).mark_ended(
-                    self._session_id, status=status, achieved_hz=achieved, sample_count=written
-                )
-                session.commit()
-            finally:
-                session.close()
+            sampler, recorder, session_id = self._sampler, self._recorder, self._session_id
             self._sampler = None
             self._recorder = None
             self._session_id = None
             self.active_vehicle_id = None
+            try:
+                await sampler.stop()
+                written = await recorder.stop() if recorder else 0
+                session = self._session_factory()
+                try:
+                    LiveSessionRepository(session).mark_ended(
+                        session_id, status=status, achieved_hz=achieved, sample_count=written
+                    )
+                    session.commit()
+                finally:
+                    session.close()
+            except Exception:  # noqa: BLE001 — state already cleared; just log the teardown failure
+                logger.exception("telemetry teardown failed for session %s; state cleared", session_id)

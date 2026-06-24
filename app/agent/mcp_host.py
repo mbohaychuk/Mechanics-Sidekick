@@ -106,7 +106,9 @@ class ObdMcpHost:
             logger.error("ObdMcpHost: startup timed out")
             return False
         if self._start_error is not None:
-            logger.warning("ObdMcpHost unavailable: %s", self._start_error)
+            # exc_info logs the full traceback + exception type so a bad obd_mcp_dir / missing uv /
+            # protocol error is diagnosable, not just a one-line message.
+            logger.warning("ObdMcpHost unavailable", exc_info=self._start_error)
             return False
         self._available = True
         return True

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -12,6 +13,8 @@ from app.telemetry.parse import LiveReadError, parse_supported_pids
 from app.telemetry.pids import CURATED_PIDS
 from app.repositories.live_sample_repository import LiveSampleRepository
 from app.repositories.live_session_repository import LiveSessionRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["telemetry"])
 
@@ -27,7 +30,9 @@ async def supported_pids(vehicle_id: int, request: Request) -> dict:
         return {"available": False, "curated": CURATED_PIDS, "supported": []}
     try:
         supported = parse_supported_pids(await host.call_async("list_supported_pids", {}))
-    except LiveReadError:
+    except LiveReadError as exc:
+        logger.warning("list_supported_pids failed for vehicle %s; returning curated PIDs only: %s",
+                       vehicle_id, str(exc)[:200])
         supported = []
     return {"available": True, "curated": CURATED_PIDS, "supported": supported}
 
@@ -75,6 +80,10 @@ async def live(vehicle_id: int, pids: str, request: Request):
                 "type": "error",
                 "detail": f"A live session is already active for vehicle {exc.active_vehicle_id}.",
             })
+        except Exception:  # noqa: BLE001 — any other subscribe/stream failure must surface, not hang
+            logger.exception("Live telemetry stream failed for vehicle %s", vehicle_id)
+            yield _sse({"type": "error", "detail": "Live telemetry failed to start."})
+            yield _sse({"type": "done"})
         finally:
             if sub is not None:
                 await manager.unsubscribe(sub)
