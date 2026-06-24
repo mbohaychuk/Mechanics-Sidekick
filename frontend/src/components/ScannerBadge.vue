@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed } from 'vue'
 import { useScannerStore } from '@/stores/scanner'
 
 const scanner = useScannerStore()
-onMounted(() => scanner.refresh())
+// Poll so the badge flips between connected / not-connected live when a scanner is plugged in or
+// pulled — no page reload needed.
+onMounted(() => scanner.startPolling())
+onUnmounted(() => scanner.stopPolling())
 
 const tone = computed(() => {
   const s = scanner.status

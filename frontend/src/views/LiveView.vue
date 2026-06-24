@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/api/client'
+import { useScannerStore } from '@/stores/scanner'
 import { useLiveSession } from '@/composables/useLiveSession'
 import type { SupportedPid } from '@/api/types'
 import LiveSparkline from '@/components/LiveSparkline.vue'
@@ -11,13 +12,14 @@ import SessionHistory from '@/components/SessionHistory.vue'
 const route = useRoute()
 const vehicleId = Number(route.params.id)
 const live = useLiveSession(vehicleId)
+const scanner = useScannerStore()
 
 const supported = ref<SupportedPid[]>([])
 const available = ref(false)
 const selected = ref<string[]>([])
 const pinned = ref<string[]>([])
 
-onMounted(async () => {
+async function loadPids() {
   const res = await api.getSupportedPids(vehicleId)
   available.value = res.available
   supported.value = res.supported
@@ -25,6 +27,14 @@ onMounted(async () => {
   const defaults = res.curated.filter((p) => supportedNames.has(p))
   selected.value = defaults.length ? defaults : res.curated
   pinned.value = selected.value.slice(0, 1)
+}
+
+onMounted(loadPids)
+
+// When a scanner comes online mid-view (plugged in during a demo), re-pull supported PIDs so the
+// "connect a scanner and reload" notice clears and the dashboard populates — no reload needed.
+watch(() => scanner.status?.scanner_reachable, (now, prev) => {
+  if (now && !prev) void loadPids()
 })
 
 onUnmounted(() => live.stop())
@@ -297,7 +307,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
 
     <!-- No scanner available notice -->
     <p v-if="!available && supported.length === 0" class="mt-6 text-center font-mono text-xs text-muted/30">
-      No OBD scanner detected. Connect a scanner and reload.
+      No OBD scanner detected. Plug one in — this will connect automatically.
     </p>
 
     <!-- Past session history + replay -->

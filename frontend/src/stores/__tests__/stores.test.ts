@@ -49,4 +49,25 @@ describe('scanner store', () => {
     expect(store.status?.available).toBe(true)
     expect(store.status?.scanner_reachable).toBe(false)
   })
+
+  it('polls status on an interval until stopped (so the badge auto-detects a plug-in)', async () => {
+    vi.useFakeTimers()
+    const mock = api.getScannerStatus as ReturnType<typeof vi.fn>
+    mock.mockResolvedValue({ available: true, scanner_reachable: false, detail: 'x' })
+    mock.mockClear()
+    const store = useScannerStore()
+
+    store.startPolling(1000)
+    await vi.advanceTimersByTimeAsync(0)       // immediate first probe
+    expect(mock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(mock).toHaveBeenCalledTimes(3)
+
+    store.stopPolling()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(mock).toHaveBeenCalledTimes(3)      // no further probes after stop
+    vi.useRealTimers()
+  })
 })
