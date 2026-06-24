@@ -43,11 +43,19 @@ def test_subscriber_offer_is_latest_wins():
     assert sub.queue.get_nowait()["seq"] == 2
 
 
-def test_sampler_reports_error_on_read_failure():
+def test_sampler_survives_a_transient_read_error():
+    # Real adapters hiccup on a multi-PID read (often the first one after connect). A single
+    # failure must be skipped, not kill the whole session — otherwise the diagnostic ends with
+    # zero samples before the operator does anything.
     from app.telemetry.parse import LiveReadError
 
+    calls = {"n": 0}
+
     async def call_live(pids):
-        raise LiveReadError("[tool error] boom")
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise LiveReadError("[tool error] transient bus hiccup")
+        return {p: {"value": 1, "unit": "x"} for p in pids}
 
     async def scenario():
         sampler = TelemetrySampler(call_live=call_live, persist=lambda s: None, target_hz=50.0, min_interval_s=0.0)
@@ -55,8 +63,29 @@ def test_sampler_reports_error_on_read_failure():
         sampler.start()
         ev = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
         await sampler.stop()
+        return ev
+
+    ev = asyncio.run(scenario())
+    assert ev["type"] == "sample"  # the transient error was skipped and sampling continued
+
+
+def test_sampler_disconnects_after_sustained_read_failures():
+    from app.telemetry.parse import LiveReadError
+
+    async def call_live(pids):
+        raise LiveReadError("[tool error] boom")
+
+    async def scenario():
+        sampler = TelemetrySampler(
+            call_live=call_live, persist=lambda s: None, target_hz=50.0, min_interval_s=0.0,
+            max_read_errors=3,
+        )
+        sub = sampler.subscribe(["RPM"], queue_size=4)
+        sampler.start()
+        ev = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
+        await sampler.stop()
         return ev, sampler.error
 
     ev, err = asyncio.run(scenario())
-    assert ev["type"] == "disconnected"
+    assert ev["type"] == "disconnected"  # a persistently dead adapter still ends the session
     assert err is not None

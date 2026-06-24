@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     live_max_pids: int = 16
     live_subscriber_queue: int = 2
     live_recorder_batch: int = 20
+    live_max_read_errors: int = 5  # consecutive failed reads before the sampler disconnects
     diag_enabled: bool = True
     diag_protocol: str = "default"
     diag_commentary_interval_s: float = 5.0

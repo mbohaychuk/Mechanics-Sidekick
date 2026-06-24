@@ -89,6 +89,7 @@ class TelemetryManager:
                     persist=self._recorder.enqueue,
                     target_hz=self._settings.live_sample_hz,
                     min_interval_s=self._settings.live_min_interval_s,
+                    max_read_errors=self._settings.live_max_read_errors,
                 )
                 self._sampler.start()
                 self.active_vehicle_id = vehicle_id
