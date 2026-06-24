@@ -48,7 +48,9 @@ class OpenAIProvider:
             stream=True,
         )
         if max_tokens is not None:
-            kwargs["max_tokens"] = max_tokens
+            # GPT-5.x rejects the legacy `max_tokens`; `max_completion_tokens` is the
+            # current OpenAI param (also accepted by 4.x/5.x-mini).
+            kwargs["max_completion_tokens"] = max_tokens
         if response_format is not None:
             kwargs["response_format"] = response_format
         stream = self._client.chat.completions.create(**kwargs)

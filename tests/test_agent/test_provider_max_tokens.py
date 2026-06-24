@@ -36,15 +36,19 @@ class _FakeClient:
         self.chat = _FakeChat()
 
 
-def test_max_tokens_is_forwarded_when_set():
+def test_token_cap_is_sent_as_max_completion_tokens():
+    # GPT-5.x rejects the legacy `max_tokens` ("Unsupported parameter ... use
+    # 'max_completion_tokens' instead"), so the provider must send the modern param.
     client = _FakeClient()
     provider = OpenAIProvider(api_key=None, model="m", client=client)
     list(provider.stream_turn([{"role": "user", "content": "hi"}], [], max_tokens=42))
-    assert client.chat.completions.kwargs["max_tokens"] == 42
+    assert client.chat.completions.kwargs["max_completion_tokens"] == 42
+    assert "max_tokens" not in client.chat.completions.kwargs  # never the deprecated name
 
 
-def test_max_tokens_omitted_when_none():
+def test_token_cap_omitted_when_none():
     client = _FakeClient()
     provider = OpenAIProvider(api_key=None, model="m", client=client)
     list(provider.stream_turn([{"role": "user", "content": "hi"}], []))
+    assert "max_completion_tokens" not in client.chat.completions.kwargs
     assert "max_tokens" not in client.chat.completions.kwargs
