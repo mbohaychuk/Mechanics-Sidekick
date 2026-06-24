@@ -24,6 +24,19 @@ def test_default_protocol_has_expected_step_ids():
     assert get_protocol("unknown") is DEFAULT_PROTOCOL  # falls back
 
 
+def test_idle_steps_have_no_floor_and_rev_is_floor_only():
+    steps = {s.id: s for s in DEFAULT_PROTOCOL.steps}
+    # An idle has no minimum — any low rpm counts as idle, only an upper bound matters.
+    for sid in ("idle_baseline", "return_idle"):
+        t = steps[sid].target
+        assert t.pid == "RPM" and t.low is None and t.high is not None
+        assert t.in_range(520) and t.in_range(700) and not t.in_range(2500)
+    # Rev: just get it above the floor; no range to fuss over holding within.
+    rev = steps["rev_2500"].target
+    assert rev.pid == "RPM" and rev.low == 2000 and rev.high is None
+    assert rev.in_range(2100) and rev.in_range(3200) and not rev.in_range(1500)
+
+
 def test_target_in_range():
     t = StepTarget(pid="RPM", low=2300, high=2700)
     assert t.in_range(2500)

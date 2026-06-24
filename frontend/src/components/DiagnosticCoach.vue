@@ -12,25 +12,43 @@ const UNIT: Record<string, string> = { RPM: 'rpm', SPEED: 'km/h', COOLANT_TEMP: 
 
 const unit = computed(() => (props.progress ? (UNIT[props.progress.pid] ?? '') : ''))
 
+const targetLabel = computed(() => {
+  const p = props.progress
+  if (!p) return ''
+  const u = unit.value
+  if (p.target_low != null && p.target_high != null) return `target ${p.target_low}–${p.target_high} ${u}`.trim()
+  if (p.target_low != null) return `target above ${p.target_low} ${u}`.trim()
+  if (p.target_high != null) return `target below ${p.target_high} ${u}`.trim()
+  return ''
+})
+
 const status = computed(() => {
   const p = props.progress
   if (!p || p.value == null) return { text: 'Waiting for live data…', cls: 'text-muted' }
   if (p.in_range) return { text: 'In range — hold it steady', cls: 'text-success' }
-  if (p.target_low != null && p.value < p.target_low)
-    return { text: `Bring it up toward ${p.target_low}–${p.target_high} ${unit.value}`.trim(), cls: 'text-warning' }
-  if (p.target_high != null && p.value > p.target_high)
-    return { text: `Ease it down toward ${p.target_low}–${p.target_high} ${unit.value}`.trim(), cls: 'text-warning' }
+  const u = unit.value
+  if (p.target_low != null && p.value < p.target_low) {
+    const goal = p.target_high != null ? `toward ${p.target_low}–${p.target_high} ${u}` : `above ${p.target_low} ${u}`
+    return { text: `Bring it up ${goal}`.trim(), cls: 'text-warning' }
+  }
+  if (p.target_high != null && p.value > p.target_high) {
+    const goal = p.target_low != null ? `toward ${p.target_low}–${p.target_high} ${u}` : `below ${p.target_high} ${u}`
+    return { text: `Ease it down ${goal}`.trim(), cls: 'text-warning' }
+  }
   return { text: 'Adjusting…', cls: 'text-muted' }
 })
 
 const gauge = computed(() => {
   const p = props.progress
-  if (!p || p.target_low == null || p.target_high == null) return null
-  const axisMax = Math.max(p.target_high * 1.5, (p.value ?? 0) * 1.1, p.target_high + 1)
+  if (!p || (p.target_low == null && p.target_high == null)) return null
+  const low = p.target_low ?? 0
+  const refHigh = p.target_high ?? Math.max(low * 1.6, (p.value ?? 0) * 1.1, low + 1)
+  const axisMax = Math.max(refHigh * 1.4, (p.value ?? 0) * 1.1, refHigh + 1)
   const pct = (v: number) => Math.max(0, Math.min(100, (v / axisMax) * 100))
+  const bandHigh = p.target_high ?? axisMax
   return {
-    bandLeft: pct(p.target_low),
-    bandWidth: pct(p.target_high) - pct(p.target_low),
+    bandLeft: pct(low),
+    bandWidth: pct(bandHigh) - pct(low),
     valuePct: p.value == null ? null : pct(p.value),
   }
 })
@@ -76,7 +94,7 @@ const dwell = computed(() => {
         />
       </div>
       <p class="mt-1 text-right font-mono text-[0.6rem] text-muted/60">
-        target {{ progress?.target_low }}–{{ progress?.target_high }} {{ unit }}
+        {{ targetLabel }}
       </p>
 
       <!-- dwell meter: how long the condition has been held -->
