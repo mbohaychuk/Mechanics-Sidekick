@@ -9,26 +9,44 @@ const emit = defineEmits<{ replay: [series: { name: string; points: [number, num
 const sessions = ref<LiveSessionSummary[]>([])
 const loading = ref(false)
 const active = ref<number | null>(null)
+const replayError = ref('')
 
-onMounted(async () => {
+async function reload() {
   loading.value = true
-  sessions.value = await api.listLiveSessions(props.vehicleId)
-  loading.value = false
-})
+  try {
+    sessions.value = await api.listLiveSessions(props.vehicleId)
+  } finally {
+    loading.value = false
+  }
+}
+onMounted(reload)
+defineExpose({ reload })  // let the parent refresh after a live session ends
 
 async function open(id: number) {
+  if (active.value === id) {  // toggle: clicking the open session closes its replay
+    active.value = null
+    emit('replay', [])
+    return
+  }
   active.value = id
-  const detail = await api.getLiveSession(id)
-  const series = detail.session.pids.map((name) => ({
-    name,
-    points: detail.samples
-      .map((s) => {
-        const v = s.values[name]
-        return v && typeof v.value === 'number' ? ([s.t, v.value] as [number, number]) : null
-      })
-      .filter((p): p is [number, number] => p !== null),
-  }))
-  emit('replay', series)
+  replayError.value = ''
+  try {
+    const detail = await api.getLiveSession(id)
+    const series = detail.session.pids.map((name) => ({
+      name,
+      points: detail.samples
+        .map((s) => {
+          const v = s.values[name]
+          return v && typeof v.value === 'number' ? ([s.t, v.value] as [number, number]) : null
+        })
+        .filter((p): p is [number, number] => p !== null),
+    }))
+    emit('replay', series)
+  } catch (err) {
+    active.value = null
+    replayError.value = err instanceof Error ? err.message : String(err)
+    emit('replay', [])
+  }
 }
 
 function fmtTime(utc: string): string {
@@ -55,6 +73,9 @@ function fmtHz(hz: number | null): string {
         {{ sessions.length }} session{{ sessions.length !== 1 ? 's' : '' }}
       </span>
     </div>
+
+    <!-- Replay fetch error -->
+    <p v-if="replayError" class="mb-2 font-mono text-xs text-danger">Couldn't load replay: {{ replayError }}</p>
 
     <!-- Loading state -->
     <p v-if="loading" class="font-mono text-xs text-muted/30">Loading…</p>
@@ -121,7 +142,7 @@ function fmtHz(hz: number | null): string {
                 ? 'text-accent'
                 : 'text-muted/20 group-hover:text-muted/50'"
             >
-              {{ active === s.id ? '▶ replaying' : 'replay' }}
+              {{ active === s.id ? '▶ replaying · close' : 'replay' }}
             </span>
           </div>
 

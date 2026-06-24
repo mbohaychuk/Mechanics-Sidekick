@@ -18,23 +18,39 @@ const supported = ref<SupportedPid[]>([])
 const available = ref(false)
 const selected = ref<string[]>([])
 const pinned = ref<string[]>([])
+const loaded = ref(false)
+const pidError = ref('')
+const historyRef = ref<InstanceType<typeof SessionHistory> | null>(null)
 
 async function loadPids() {
-  const res = await api.getSupportedPids(vehicleId)
-  available.value = res.available
-  supported.value = res.supported
-  const supportedNames = new Set(res.supported.map((p) => p.name))
-  const defaults = res.curated.filter((p) => supportedNames.has(p))
-  selected.value = defaults.length ? defaults : res.curated
-  pinned.value = selected.value.slice(0, 1)
+  try {
+    const res = await api.getSupportedPids(vehicleId)
+    available.value = res.available
+    supported.value = res.supported
+    const supportedNames = new Set(res.supported.map((p) => p.name))
+    const defaults = res.curated.filter((p) => supportedNames.has(p))
+    selected.value = defaults.length ? defaults : res.curated
+    pinned.value = selected.value.slice(0, 1)
+    pidError.value = ''
+  } catch (err) {
+    pidError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    loaded.value = true
+  }
 }
 
 onMounted(loadPids)
 
-// When a scanner comes online mid-view (plugged in during a demo), re-pull supported PIDs so the
-// "connect a scanner and reload" notice clears and the dashboard populates — no reload needed.
+// Re-pull PIDs on ANY scanner transition: a plug-in clears the notice + populates the dashboard;
+// an unplug refreshes availability so the page reflects the disconnect — no reload needed.
 watch(() => scanner.status?.scanner_reachable, (now, prev) => {
-  if (now && !prev) void loadPids()
+  if (now !== prev) void loadPids()
+})
+
+// Refresh the recorded-session list when a live session ends so the just-recorded run shows up.
+watch(() => live.status.value, (now, prev) => {
+  const wasActive = prev === 'streaming' || prev === 'connecting'
+  if (wasActive && now !== 'streaming' && now !== 'connecting') historyRef.value?.reload()
 })
 
 onUnmounted(() => live.stop())
@@ -62,19 +78,36 @@ function togglePin(name: string) {
     ? pinned.value.filter((p) => p !== name)
     : [...pinned.value, name]
 }
+function roundSmart(n: number): number {
+  const a = Math.abs(n)
+  if (a >= 100) return Math.round(n)
+  if (a >= 1) return Math.round(n * 10) / 10
+  return Math.round(n * 100) / 100
+}
 function fmt(name: string): string {
   const v = live.latest[name]
+  const raw = v && v.value !== null && typeof v.value === 'number' ? roundSmart(v.value) : v?.value
   if (!v || v.value === null) return '—'
-  return `${v.value}${v.unit ? ' ' + v.unit : ''}`
+  return `${raw}${v.unit ? ' ' + v.unit : ''}`
 }
 
 const isStreaming = computed(
   () => live.status.value === 'streaming' || live.status.value === 'connecting',
 )
+const hzText = computed(() =>
+  isStreaming.value && live.achievedHz.value ? live.achievedHz.value.toFixed(1) : '—',
+)
+const LIVE_LABEL: Record<string, string> = {
+  idle: 'Idle', connecting: 'Connecting…', streaming: 'Live', error: 'Error',
+}
+const statusLabel = computed(() => LIVE_LABEL[live.status.value] ?? live.status.value)
 
 const replaySeries = ref<{ name: string; points: [number, number][] }[]>([])
 function onReplay(series: { name: string; points: [number, number][] }[]) {
   replaySeries.value = series
+}
+function closeReplay() {
+  replaySeries.value = []
 }
 </script>
 
@@ -104,7 +137,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
           <!-- Status lamp -->
           <span
             class="relative flex h-2.5 w-2.5 shrink-0"
-            :title="live.status.value"
+            :title="statusLabel"
           >
             <span
               v-if="live.status.value === 'streaming'"
@@ -136,7 +169,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
           <div class="text-right">
             <div class="font-mono text-base font-semibold leading-none tabular-nums"
               :class="isStreaming ? 'text-accent' : 'text-muted/30'">
-              {{ isStreaming && live.achievedHz.value ? live.achievedHz.value : '—' }}
+              {{ hzText }}
             </div>
             <div class="mt-0.5 font-mono text-[0.6rem] uppercase tracking-widest text-muted/40">Hz</div>
           </div>
@@ -150,7 +183,7 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
                 'text-danger': live.status.value === 'error',
                 'text-muted/40': live.status.value === 'idle',
               }">
-              {{ live.status.value }}
+              {{ statusLabel }}
             </div>
           </div>
 
@@ -228,10 +261,10 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
             {{ name }}
           </span>
 
-          <!-- Live value -->
+          <!-- Live value (de-emphasised when stopped so a frozen dashboard never reads as live) -->
           <span
             class="w-20 shrink-0 text-right font-mono text-sm tabular-nums transition-colors duration-200 sm:w-24"
-            :class="fmt(name) === '—' ? 'text-muted/30' : 'text-accent'"
+            :class="fmt(name) === '—' ? 'text-muted/30' : (isStreaming ? 'text-accent' : 'text-muted/50')"
           >
             {{ fmt(name) }}
           </span>
@@ -254,8 +287,9 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
             pin
           </button>
 
-          <!-- Remove -->
+          <!-- Remove (channels are fixed while streaming — stop to edit) -->
           <button
+            v-if="!isStreaming"
             class="shrink-0 rounded px-1.5 py-0.5 font-mono text-[0.6rem] text-muted/20 opacity-0 transition-opacity duration-100 group-hover:opacity-100 hover:text-danger"
             title="Remove channel"
             :aria-label="'Remove ' + name"
@@ -282,7 +316,8 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
         <select
           aria-label="Add a PID channel"
           class="flex-1 rounded-md border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-text outline-none transition-colors duration-150 focus:border-accent/50 focus:ring-1 focus:ring-accent/20 disabled:opacity-40"
-          :disabled="addable.length === 0"
+          :disabled="addable.length === 0 || isStreaming"
+          :title="isStreaming ? 'Stop streaming to change channels' : ''"
           @change="addPid(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''"
         >
           <option value="">{{ addable.length ? '+ Select PID…' : 'All supported PIDs active' }}</option>
@@ -305,15 +340,30 @@ function onReplay(series: { name: string; points: [number, number][] }[]) {
       </div>
     </section>
 
-    <!-- No scanner available notice -->
-    <p v-if="!available && supported.length === 0" class="mt-6 text-center font-mono text-xs text-muted/30">
+    <!-- PID-load error (distinct from a genuinely absent scanner) -->
+    <div v-if="pidError" class="mt-6 flex items-start gap-2.5 rounded-md border border-danger/30 bg-danger/8 px-4 py-3">
+      <p class="font-mono text-xs text-danger">Couldn't load channels: {{ pidError }}</p>
+    </div>
+
+    <!-- Detecting / no-scanner notice (guarded on `loaded` so it never flashes during initial load) -->
+    <p v-if="!loaded" class="mt-6 text-center font-mono text-xs text-muted/30">Detecting scanner…</p>
+    <p v-else-if="!pidError && !available && supported.length === 0" class="mt-6 text-center font-mono text-xs text-muted/30">
       No OBD scanner detected. Plug one in — this will connect automatically.
     </p>
 
     <!-- Past session history + replay -->
     <div class="mt-8">
-      <SessionHistory :vehicle-id="vehicleId" @replay="onReplay" />
-      <LiveFocusChart v-if="replaySeries.length" class="mt-3" :series="replaySeries" />
+      <SessionHistory ref="historyRef" :vehicle-id="vehicleId" @replay="onReplay" />
+      <div v-if="replaySeries.length" class="mt-3">
+        <div class="mb-1 flex items-center justify-between">
+          <span class="font-mono text-[0.6rem] uppercase tracking-widest text-accent/70">Replay</span>
+          <button
+            class="font-mono text-[0.6rem] uppercase tracking-widest text-muted/40 transition-colors hover:text-danger"
+            @click="closeReplay"
+          >✕ close</button>
+        </div>
+        <LiveFocusChart :series="replaySeries" />
+      </div>
     </div>
 
   </main>
