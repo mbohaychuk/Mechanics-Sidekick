@@ -9,7 +9,8 @@ def test_diagnostic_settings_defaults():
     assert s.diag_commentary_max_tokens == 160
     assert s.diag_commentary_window_s == 15.0
     assert s.diag_commentary_max_points == 20
-    assert s.diag_max_adhoc_steps == 2
+    assert s.diag_max_adhoc_steps == 0  # ad-hoc LLM step insertion off by default
+    assert s.diag_stall_ticks == 20
     assert s.diag_fuel_trim_pct == 10.0
     assert s.diag_coolant_max_c == 105.0
     assert s.diag_idle_rpm_jitter == 150.0

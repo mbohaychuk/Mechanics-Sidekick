@@ -57,7 +57,8 @@ class Settings(BaseSettings):
     diag_commentary_max_tokens: int = 160
     diag_commentary_window_s: float = 15.0
     diag_commentary_max_points: int = 20
-    diag_max_adhoc_steps: int = 2
+    diag_max_adhoc_steps: int = 0  # LLM-inserted ad-hoc steps off by default — keep the flow predictable
+    diag_stall_ticks: int = 20  # consecutive ~1s ticks with no live sample before the session ends
     diag_fuel_trim_pct: float = 10.0
     diag_coolant_max_c: float = 105.0
     diag_idle_rpm_jitter: float = 150.0

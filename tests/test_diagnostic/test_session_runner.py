@@ -29,9 +29,10 @@ def _factory():
 class FakeManager:
     """Returns a Subscriber pre-loaded with scripted sample events. Records a recorded
     live_session + live_samples so the runner can read capture windows back by seq range."""
-    def __init__(self, factory, samples):
+    def __init__(self, factory, samples, disconnect_at_end=True):
         self._factory = factory
         self._samples = samples
+        self._disconnect_at_end = disconnect_at_end
         self.unsubscribed = False
 
     async def subscribe(self, vehicle_id, pids):
@@ -50,7 +51,8 @@ class FakeManager:
         sub = Subscriber(pids, queue_size=64)
         for e in self._samples:
             sub.queue.put_nowait(e)
-        sub.queue.put_nowait({"type": "disconnected", "detail": "scripted end"})
+        if self._disconnect_at_end:
+            sub.queue.put_nowait({"type": "disconnected", "detail": "scripted end"})
         return live_id, sub, None
 
     async def unsubscribe(self, sub):
@@ -199,6 +201,50 @@ def test_runner_streams_step_progress_while_holding_a_target():
     assert progress[1]["dwell_elapsed_s"] == 0.0   # just entered the band
     assert progress[2]["dwell_elapsed_s"] == 1.0   # held one more second
     assert progress[2]["dwell_required_s"] == 10.0
+
+
+def test_runner_ends_on_a_stalled_feed_instead_of_hanging():
+    # If live samples stop arriving without a disconnect event (operator walks away, adapter goes
+    # quiet), the session must finalize after diag_stall_ticks idle ticks — never hang forever.
+    factory = _factory()
+    s = factory()
+    try:
+        v = Vehicle(year=2015, make="Ford", model="F-150", engine="5.0L", vin="X")
+        s.add(v)
+        s.commit()
+        vid = v.id
+    finally:
+        s.close()
+
+    settings = Settings(_env_file=None)
+    settings.diag_commentary_interval_s = 999.0
+    settings.diag_stall_ticks = 2  # keep the test fast (~2s of idle ticks)
+    protocol = DiagnosticProtocol(name="t", steps=[
+        Step(id="idle", label="Idle", instruction="idle", target=StepTarget("RPM", None, 1300),
+             capture_pids=["RPM"], min_dwell_s=999.0, timeout_s=999.0),  # never completes
+    ])
+    samples = [{"type": "sample", "seq": 1, "t": 0, "hz": 1.0, "values": {"RPM": {"value": 600, "unit": "rpm"}}}]
+
+    def diagnoser_factory(session):
+        class _D:
+            def diagnose(self, flag, label):
+                return Finding(flag.system, flag.severity, flag.detail)
+        return _D()
+
+    runner = DiagnosticSessionRunner(
+        manager=FakeManager(factory, samples, disconnect_at_end=False), session_factory=factory,
+        vehicle_id=vid, vehicle_label="2015 Ford F-150", protocol=protocol, commentary=FakeCommentary(),
+        diagnoser_factory=diagnoser_factory, report_builder=FakeReportBuilder(), settings=settings,
+    )
+
+    async def drive():
+        return [ev async for ev in runner.run()]
+
+    events = asyncio.run(drive())
+    types = [e["type"] for e in events]
+    assert "done" in types  # it finalized rather than hanging
+    report = next(e for e in events if e["type"] == "report")
+    assert report["overall_status"] == "incomplete"
 
 
 def test_runner_reports_incomplete_when_no_step_is_completed():

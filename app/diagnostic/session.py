@@ -61,13 +61,18 @@ class DiagnosticSessionRunner:
             yield session_event
 
             last_comment = time.monotonic()
+            stall_ticks = 0
             while True:
                 try:
                     event = await asyncio.wait_for(sub.queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
-                    if self._runner.is_complete():
+                    stall_ticks += 1
+                    # Stop once the protocol is done, or if the live feed has stalled (operator
+                    # walked away / adapter went quiet) — never hang waiting for a step forever.
+                    if self._runner.is_complete() or stall_ticks >= self._settings.diag_stall_ticks:
                         break
                     continue
+                stall_ticks = 0
 
                 if event.get("type") == "disconnected":
                     break
