@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     web_search_enabled: bool = True
     tavily_api_key: str = ""
     web_search_max_results: int = 5
+    recalls_enabled: bool = True  # NHTSA recall lookup tool (US, key-free public API)
     live_sample_hz: float = 1.0
     live_min_interval_s: float = 0.25
     live_max_pids: int = 16

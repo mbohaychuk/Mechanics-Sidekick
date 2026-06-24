@@ -44,6 +44,13 @@ const renderedContent = computed(() => renderMarkdown(props.content))
             <span class="text-muted/40">·</span>
             <span class="uppercase text-muted/70">{{ s.overall_status }}</span>
           </template>
+          <template v-else-if="s.kind === 'recall'">
+            <span>Recall {{ s.campaign }}</span>
+            <template v-if="s.component">
+              <span class="text-muted/40">·</span>
+              <span class="text-muted/70">{{ s.component }}</span>
+            </template>
+          </template>
           <template v-else>
             <span>{{ (s.filename as string) ?? (s.url as string) }}</span>
             <template v-if="s.page">

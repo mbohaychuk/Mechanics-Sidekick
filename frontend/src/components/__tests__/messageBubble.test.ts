@@ -22,4 +22,16 @@ describe('MessageBubble sources', () => {
     expect(w.text()).toContain('2026-06-15')
     expect(w.text().toLowerCase()).toContain('fair')
   })
+
+  it('renders a recall source (campaign + component)', () => {
+    const w = mount(MessageBubble, {
+      props: {
+        role: 'assistant', content: 'There is a transmission recall.',
+        sources: [{ kind: 'recall', campaign: '26V237000', component: 'POWER TRAIN:AUTOMATIC TRANSMISSION' }],
+      },
+    })
+    expect(w.text().toLowerCase()).toContain('recall')
+    expect(w.text()).toContain('26V237000')
+    expect(w.text()).toContain('AUTOMATIC TRANSMISSION')
+  })
 })

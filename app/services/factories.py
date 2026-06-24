@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.orchestrator import AgentOrchestrator
 from app.agent.provider import OpenAIProvider
+from app.agent.recalls_client import NhtsaRecallsClient
 from app.config import Settings
 from app.diagnostic.commentary import CommentaryGenerator
 from app.diagnostic.diagnosis import Diagnoser
@@ -64,6 +65,7 @@ def make_chat_orchestrator(
         from tavily import TavilyClient
 
         web_search_client = TavilyClient(api_key=settings.tavily_api_key)
+    recalls_client = NhtsaRecallsClient() if settings.recalls_enabled else None
     return AgentOrchestrator(
         chat_repo=ChatRepository(session),
         job_repo=JobRepository(session),
@@ -77,6 +79,7 @@ def make_chat_orchestrator(
         web_search_client=web_search_client,
         web_search_max_results=settings.web_search_max_results,
         diag_repo=DiagnosticSessionRepository(session),
+        recalls_client=recalls_client,
     )
 
 

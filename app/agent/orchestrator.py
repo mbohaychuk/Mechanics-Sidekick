@@ -7,9 +7,11 @@ from collections.abc import Iterator
 from app.agent.provider import ChatProvider, ToolCall
 from app.agent.tools import (
     GET_DIAGNOSTICS_TOOL,
+    GET_RECALLS_TOOL,
     SEARCH_MANUALS_TOOL,
     WEB_SEARCH_TOOL,
     execute_get_diagnostic_reports,
+    execute_get_recalls,
     execute_search_manuals,
     execute_web_search,
 )
@@ -32,8 +34,10 @@ SYSTEM_PROMPT = (
     "spec/value/code and intent='procedure' for a how-to. If the excerpts do not contain the "
     "answer, reformulate the query and search again before giving up. You also have "
     "read-only OBD tools (read live data, trouble codes (DTCs), freeze frames, readiness monitors, "
-    "and vehicle info directly from the connected car); and web_search (the public web, for recalls, "
-    "bulletins, and information not in the manuals — use only when the manuals do not cover it). "
+    "and vehicle info directly from the connected car); get_recalls (official NHTSA safety recalls "
+    "for this vehicle — use this for any recall question, and consider it when a fault or DTC could "
+    "be recall-related); and web_search (the public web, for technical service bulletins and "
+    "information not in the manuals — use only when the manuals do not cover it). "
     "Ground factual answers in the manuals or live readings; never invent specs or codes. State a "
     "specific value (a torque, capacity, fluid type, clearance, or angle) ONLY if it appears in a "
     "retrieved excerpt, and quote it from that excerpt; if no excerpt contains it, say you could not "
@@ -73,6 +77,7 @@ class AgentOrchestrator:
         web_search_client=None,
         web_search_max_results: int = 5,
         diag_repo=None,
+        recalls_client=None,
     ) -> None:
         self._chat_repo = chat_repo
         self._job_repo = job_repo
@@ -86,6 +91,7 @@ class AgentOrchestrator:
         self._web_search_client = web_search_client
         self._web_search_max_results = web_search_max_results
         self._diag_repo = diag_repo
+        self._recalls_client = recalls_client
 
     def run(self, job_id: int, user_message: str) -> Iterator[dict]:
         job = self._job_repo.get_by_id(job_id)
@@ -115,6 +121,8 @@ class AgentOrchestrator:
             tools.append(WEB_SEARCH_TOOL)
         if self._diag_repo is not None:
             tools.append(GET_DIAGNOSTICS_TOOL)
+        if self._recalls_client is not None:
+            tools.append(GET_RECALLS_TOOL)
         if self._obd_host is not None and self._obd_host.available:
             tools.extend(self._obd_host.openai_tools())
         sources: list[dict] = []
@@ -160,7 +168,7 @@ class AgentOrchestrator:
                 )
                 for tc in turn.tool_calls:
                     yield {"type": "tool_call", "name": tc.name, "arguments": tc.arguments}
-                    result = self._execute(tc, job.vehicle_id)
+                    result = self._execute(tc, vehicle)
                     sources.extend(result.get("sources", []))
                     yield {"type": "tool_result", "name": tc.name}
                     messages.append(
@@ -184,19 +192,19 @@ class AgentOrchestrator:
         yield {"type": "error", "detail": "max_iterations_reached"}
         yield {"type": "done"}
 
-    def _execute(self, tc: ToolCall, vehicle_id: int) -> dict:
+    def _execute(self, tc: ToolCall, vehicle) -> dict:
         # A single tool failure must degrade to a tool result the model can react to,
         # not abort the whole turn (mirrors the OBD host's soft-fail contract).
         try:
-            return self._dispatch(tc, vehicle_id)
+            return self._dispatch(tc, vehicle)
         except Exception as exc:
             logger.exception("Tool %s failed", tc.name)
             return {"sources": [], "model_text": f"[tool error] {tc.name}: {exc}"}
 
-    def _dispatch(self, tc: ToolCall, vehicle_id: int) -> dict:
+    def _dispatch(self, tc: ToolCall, vehicle) -> dict:
         if tc.name == "search_manuals":
             return execute_search_manuals(
-                self._retrieval, self._doc_repo, vehicle_id,
+                self._retrieval, self._doc_repo, vehicle.id,
                 tc.arguments.get("query", ""), tc.arguments.get("intent"),
             )
         if tc.name == "web_search" and self._web_search_client is not None:
@@ -207,7 +215,11 @@ class AgentOrchestrator:
             )
         if tc.name == "get_diagnostic_reports" and self._diag_repo is not None:
             return execute_get_diagnostic_reports(
-                self._diag_repo, vehicle_id, tc.arguments.get("query")
+                self._diag_repo, vehicle.id, tc.arguments.get("query")
+            )
+        if tc.name == "get_recalls" and self._recalls_client is not None:
+            return execute_get_recalls(
+                self._recalls_client, vehicle.year, vehicle.make, vehicle.model
             )
         if self._obd_host is not None and self._obd_host.handles(tc.name):
             return {"sources": [], "model_text": self._obd_host.call(tc.name, tc.arguments)}

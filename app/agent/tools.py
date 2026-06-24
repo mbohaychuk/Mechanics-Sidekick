@@ -140,6 +140,48 @@ def execute_get_diagnostic_reports(diag_repo, vehicle_id: int, query: str | None
     return {"sources": sources, "model_text": "\n\n".join(blocks)}
 
 
+GET_RECALLS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_recalls",
+        "description": (
+            "Look up official NHTSA (US) safety recalls for THIS vehicle by its year, make, and "
+            "model. Returns each recall campaign with the affected component, the safety risk, and "
+            "the dealer remedy. Use this whenever the user asks about recalls, or when a symptom or "
+            "trouble code might be covered by one. No input needed — it uses the vehicle on this job."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+
+def execute_get_recalls(client, year: int, make: str, model: str) -> dict:
+    try:
+        recalls = client.recalls_by_vehicle(year, make, model)
+    except Exception:  # network/non-200 — degrade to a tool result the model can relay, not a crash
+        return {"sources": [], "model_text": "The NHTSA recall service could not be reached right now."}
+
+    label = f"{year} {make} {model}"
+    if not recalls:
+        return {"sources": [], "model_text": f"No open NHTSA safety recalls found for the {label}."}
+
+    sources: list[dict] = []
+    blocks: list[str] = []
+    for r in recalls:
+        campaign = r.get("NHTSACampaignNumber", "unknown")
+        component = r.get("Component", "")
+        date = r.get("ReportReceivedDate", "")
+        sources.append({"kind": "recall", "campaign": campaign, "component": component, "date": date})
+        blocks.append(
+            f"Recall {campaign} — {component} (reported {date})\n"
+            f"  Defect: {r.get('Summary', '')}\n"
+            f"  Risk: {r.get('Consequence', '')}\n"
+            f"  Remedy: {r.get('Remedy', '')}"
+        )
+    header = f"{len(recalls)} NHTSA safety recall(s) on file for the {label}:"
+    return {"sources": sources, "model_text": header + "\n\n" + "\n\n".join(blocks)}
+
+
 def execute_web_search(client, query: str, max_results: int = 5) -> dict:
     response = client.search(
         query=query,

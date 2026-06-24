@@ -31,7 +31,8 @@ def _seed(db_session):
     db_session.flush()
 
 
-def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_client=None, vehicle_repo=None):
+def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_client=None,
+                  vehicle_repo=None, recalls_client=None):
     retrieval = MagicMock()
     retrieval.retrieve.return_value = [
         (SimpleNamespace(document_id=1, page_number=10, content="Torque 40 Nm."), 0.9)
@@ -49,6 +50,7 @@ def _orchestrator(db_session, provider, max_iters=6, obd_host=None, web_search_c
         max_iters=max_iters,
         obd_host=obd_host,
         web_search_client=web_search_client,
+        recalls_client=recalls_client,
     )
 
 
@@ -298,3 +300,26 @@ def test_web_search_advertised_and_dispatched(db_session):
 
     assert "web_search" in provider.seen_tool_names[0]
     web_client.search.assert_called_once()
+
+
+def test_recalls_advertised_and_dispatched_with_server_side_vehicle(db_session):
+    # get_recalls must be advertised when a client is present, and the orchestrator must feed it
+    # the vehicle's own year/make/model (server-side) rather than anything the model passes.
+    _seed(db_session)
+    recalls_client = MagicMock()
+    recalls_client.recalls_by_vehicle.return_value = [
+        {"NHTSACampaignNumber": "18V894000", "Component": "POWER TRAIN:AUTOMATIC TRANSMISSION",
+         "ReportReceivedDate": "18/12/2018", "Summary": "s", "Consequence": "c", "Remedy": "r"}
+    ]
+    provider = CapturingProvider(
+        [
+            ProviderTurn(text="", tool_calls=[ToolCall("c1", "get_recalls", {})]),
+            ProviderTurn(text="There is a transmission recall.", tool_calls=[]),
+        ]
+    )
+    orch = _orchestrator(db_session, provider, recalls_client=recalls_client)
+
+    list(orch.run(job_id=1, user_message="any recalls?"))
+
+    assert "get_recalls" in provider.seen_tool_names[0]
+    recalls_client.recalls_by_vehicle.assert_called_once_with(2004, "Audi", "A8")
