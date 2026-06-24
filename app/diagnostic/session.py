@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import AsyncIterator
 
 from app.diagnostic.anomaly import evaluate, evaluate_window
+
+logger = logging.getLogger(__name__)
 from app.diagnostic.commentary import summarize_window
 from app.diagnostic.protocol import ProtocolRunner, safe_adhoc_step
 from app.diagnostic.report import HealthReport, report_to_json
@@ -60,6 +63,13 @@ class DiagnosticSessionRunner:
                 session_event["vin_mismatch"] = mismatch
             yield session_event
 
+            # Announce the first step as active immediately so the coach card + active highlight
+            # render at session start (otherwise step 1 stays 'pending' until it completes, and an
+            # incomplete run would never show a coach card at all).
+            first = self._runner.current()
+            if first is not None:
+                yield self._step_event(first)
+
             last_comment = time.monotonic()
             stall_ticks = 0
             while True:
@@ -113,10 +123,14 @@ class DiagnosticSessionRunner:
             async for ev in self._finalize(loop, diag_id):
                 yield ev
             yield {"type": "done"}
-        except Exception as exc:  # noqa: BLE001 — surface as an error event, never crash the stream
+        except Exception:  # noqa: BLE001 — surface as an error event, never crash the stream
+            logger.exception(
+                "Diagnostic session failed (vehicle=%s, diag_id=%s)", self._vehicle_id, diag_id
+            )
             if diag_id is not None:
                 await loop.run_in_executor(None, self._error_row, diag_id)
-            yield {"type": "error", "detail": str(exc)}
+            # Generic detail only — never ship raw exception text to the browser.
+            yield {"type": "error", "detail": "The diagnostic run hit an internal error and was stopped."}
         finally:
             if sub is not None:
                 await self._manager.unsubscribe(sub)
@@ -236,5 +250,12 @@ class DiagnosticSessionRunner:
                      "cooling": "Coolant temperature stayed within range.",
                      "o2": "O2 sensor switching looked normal.",
                      "idle": "Idle speed was stable."}
-        good_systems = {sys: obs for sys, obs in monitored.items() if sys not in flagged_systems}
+        # Only call a system healthy if it was ACTUALLY measured — never report "good" for a system
+        # whose PIDs never appeared in the recording (that would be a fabricated all-clear).
+        system_pids = {"fuel": ("SHORT_FUEL_TRIM_1", "LONG_FUEL_TRIM_1"), "cooling": ("COOLANT_TEMP",),
+                       "o2": ("O2_B1S1", "O2_B1S2"), "idle": ("RPM",)}
+        observed = {pid for s in recorded for pid, v in s["values"].items()
+                    if v is not None and v.get("value") is not None}
+        good_systems = {sys: obs for sys, obs in monitored.items()
+                        if sys not in flagged_systems and any(p in observed for p in system_pids[sys])}
         return good_systems, diagnoses

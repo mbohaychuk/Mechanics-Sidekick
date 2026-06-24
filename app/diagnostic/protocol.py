@@ -56,8 +56,8 @@ DEFAULT_PROTOCOL = DiagnosticProtocol(
              capture_pids=["RPM", "COOLANT_TEMP", *_FUEL], min_dwell_s=10.0, timeout_s=45.0),
         Step(id="warm_up", label="Warm up",
              instruction="Keep idling until the engine reaches operating temperature.",
-             target=StepTarget("COOLANT_TEMP", 80, 105),
-             capture_pids=["COOLANT_TEMP", "RPM"], min_dwell_s=5.0, timeout_s=120.0),
+             target=StepTarget("COOLANT_TEMP", 80, None),  # floor only — an already-warm engine passes at once
+             capture_pids=["COOLANT_TEMP", "RPM"], min_dwell_s=5.0, timeout_s=30.0),
         Step(id="rev_2500", label="Rev above 2000 rpm",
              instruction="Rev the engine above 2000 rpm and hold it there.",
              target=StepTarget("RPM", 2000, None),  # floor only — no range to hold within
@@ -68,9 +68,9 @@ DEFAULT_PROTOCOL = DiagnosticProtocol(
              target=StepTarget("RPM", None, 1300),  # no floor
              capture_pids=["RPM", *_FUEL], min_dwell_s=6.0, timeout_s=45.0),
         Step(id="steady_cruise", label="Steady cruise (optional)",
-             instruction="If driving, hold a steady 50-70 km/h. Skipped automatically on a stationary test.",
+             instruction="Optional: if you're driving, hold a steady 50-70 km/h. Skipped automatically when parked.",
              target=StepTarget("SPEED", 50, 70),
-             capture_pids=["SPEED", "RPM", "MAF", *_FUEL], min_dwell_s=20.0, timeout_s=30.0),
+             capture_pids=["SPEED", "RPM", "MAF", *_FUEL], min_dwell_s=20.0, timeout_s=12.0),
     ],
 )
 
