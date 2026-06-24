@@ -9,11 +9,30 @@ class LiveReadError(Exception):
 
 
 def _load(text: str) -> Any:
+    # Fast path: the host returned a single JSON value (dict or array).
     try:
         return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # The MCP host serializes a list-returning tool (read_live_data) as one content block per row
+    # and joins them with newlines, so the payload is several concatenated JSON objects (NDJSON),
+    # not one JSON value. Decode them all. A genuine sentinel ("[tool error] ...") still fails here.
+    decoder = json.JSONDecoder()
+    items: list = []
+    idx, n = 0, len(text)
+    try:
+        while idx < n:
+            while idx < n and text[idx].isspace():
+                idx += 1
+            if idx >= n:
+                break
+            obj, idx = decoder.raw_decode(text, idx)
+            items.append(obj)
     except json.JSONDecodeError as exc:
-        # Host sentinels ("[obd unavailable] ...", "[tool error] ...") are not JSON.
         raise LiveReadError(text) from exc
+    if not items:
+        raise LiveReadError(text)
+    return items
 
 
 def _as_list(data: Any) -> list:
@@ -23,6 +42,8 @@ def _as_list(data: Any) -> list:
         for key in ("result", "results", "readings", "data"):
             if isinstance(data.get(key), list):
                 return data[key]
+        if data.get("name") or data.get("pid"):  # a bare single reading row
+            return [data]
     return []
 
 

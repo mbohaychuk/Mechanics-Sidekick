@@ -39,6 +39,29 @@ def test_parse_live_data_real_obd_mcp_shape_success_rows_carry_null_error_key():
     assert out["COOLANT_TEMP"] is None
 
 
+def test_parse_live_data_handles_ndjson_from_multiblock_tool_result():
+    # read_live_data returns a LIST, which the MCP host serializes as one content block per row
+    # and joins with newlines — so the payload is several concatenated JSON objects (NDJSON), not
+    # a single JSON array. The parser must decode all of them, compact OR pretty-printed.
+    rows = [
+        {"pid": "0C", "name": "RPM", "value": 978, "unit": "rpm", "error": None},
+        {"pid": "05", "name": "COOLANT_TEMP", "value": 72, "unit": "C", "error": None},
+        {"pid": "10", "name": "MAF", "value": None, "unit": None, "error": "NOT_SUPPORTED"},
+    ]
+    out = parse_live_data("\n".join(json.dumps(r) for r in rows))
+    assert out["RPM"] == {"value": 978, "unit": "rpm"}
+    assert out["COOLANT_TEMP"] == {"value": 72, "unit": "C"}
+    assert out["MAF"] is None
+
+    out_pretty = parse_live_data("\n".join(json.dumps(r, indent=2) for r in rows))
+    assert out_pretty["RPM"] == {"value": 978, "unit": "rpm"}
+
+
+def test_parse_live_data_handles_a_single_reading_object():
+    out = parse_live_data(json.dumps({"pid": "0C", "name": "RPM", "value": 978, "unit": "rpm", "error": None}))
+    assert out["RPM"] == {"value": 978, "unit": "rpm"}
+
+
 def test_parse_live_data_raises_on_host_sentinel():
     # Host sentinels start with "[" but are NOT valid JSON — must be distinguished by json.loads, not prefix.
     for sentinel in ["[obd unavailable] ...", "[tool error] read_live_data: boom", "[obd error] nope"]:
