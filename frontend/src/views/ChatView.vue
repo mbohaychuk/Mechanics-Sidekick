@@ -11,6 +11,7 @@ interface Turn {
   role: string
   content: string
   sources: Array<Record<string, unknown>> | null
+  error?: string
 }
 
 const route = useRoute()
@@ -45,6 +46,10 @@ onUnmounted(() => controller?.abort())
 
 watch(() => turns.value.length, scrollBottom)
 
+function stop() {
+  controller?.abort()  // interrupt a long/wrong answer; the catch swallows AbortError
+}
+
 async function send() {
   const content = draft.value.trim()
   if (!content || streaming.value) return
@@ -70,12 +75,12 @@ async function send() {
       } else if (e.type === 'sources') {
         assistant.sources = e.sources
       } else if (e.type === 'error') {
-        assistant.content += `\n[error] ${e.detail}`
+        assistant.error = e.detail
       }
     }, controller.signal)
   } catch (err) {
     if ((err as Error).name !== 'AbortError') {
-      assistant.content += `\n[connection error] ${(err as Error).message}`
+      assistant.error = (err as Error).message
     }
   } finally {
     streaming.value = false
@@ -114,6 +119,7 @@ async function send() {
           :role="t.role"
           :content="t.content"
           :sources="t.sources"
+          :error="t.error"
         />
 
         <!-- Tool activity row — shown while tools are active -->
@@ -147,9 +153,22 @@ async function send() {
             @keydown.enter.exact.prevent="send"
           />
         </div>
+        <!-- Stop button while streaming so a long/wrong answer can be interrupted -->
         <button
+          v-if="streaming"
+          type="button"
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-danger/40 bg-danger/10 text-danger shadow-sm transition-all duration-150 hover:bg-danger/20 active:scale-95"
+          aria-label="Stop generating"
+          @click="stop"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-3.5 w-3.5" aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" rx="2"/>
+          </svg>
+        </button>
+        <button
+          v-else
           type="submit"
-          :disabled="streaming || !draft.trim()"
+          :disabled="!draft.trim()"
           class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-bg shadow-sm transition-all duration-150 hover:bg-accent-strong active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="Send message"
         >

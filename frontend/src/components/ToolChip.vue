@@ -4,8 +4,18 @@ const props = defineProps<{ name: string; active?: boolean }>()
 const icon = computed(() => {
   if (props.name === 'search_manuals') return '📖'
   if (props.name === 'web_search') return '🔎'
+  if (props.name === 'get_recalls') return '🛟'
+  if (props.name === 'get_diagnostic_reports') return '📋'
   return '🔧'
 })
+// Human-readable action labels so the audience sees what the agent is doing, not machine names.
+const LABELS: Record<string, string> = {
+  search_manuals: 'Searching manuals',
+  web_search: 'Searching the web',
+  get_recalls: 'Checking recalls',
+  get_diagnostic_reports: 'Reviewing past reports',
+}
+const label = computed(() => LABELS[props.name] ?? 'Reading live data')
 </script>
 
 <template>
@@ -14,7 +24,7 @@ const icon = computed(() => {
     :class="active ? 'border-accent/40 text-accent/80' : ''"
   >
     <span class="text-[0.7rem] leading-none">{{ icon }}</span>
-    <span class="tracking-tight">{{ name }}</span>
+    <span class="tracking-tight">{{ label }}</span>
   </span>
 </template>
 

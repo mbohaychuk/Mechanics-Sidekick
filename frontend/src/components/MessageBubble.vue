@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { renderMarkdown } from '@/markdown'
 
-const props = defineProps<{ role: string; content: string; sources?: Array<Record<string, unknown>> | null }>()
+const props = defineProps<{ role: string; content: string; sources?: Array<Record<string, unknown>> | null; error?: string }>()
 
 // Only the assistant's text is markdown (the model writes **bold**, lists, `code`, etc.); user text
 // is shown verbatim so their literal characters are never reinterpreted as formatting.
@@ -27,7 +27,12 @@ const renderedContent = computed(() => renderMarkdown(props.content))
       <!-- Rendered markdown once tokens arrive; a blinking cursor while the turn is still empty (streaming) -->
       <!-- eslint-disable-next-line vue/no-v-html -- input is markdown-it output with html:false (see markdown.ts) -->
       <div v-if="content" class="md-body" v-html="renderedContent" />
-      <span v-else class="inline-block w-[2px] h-[1em] bg-accent/70 align-text-bottom animate-[cursor-blink_0.9s_step-end_infinite]" aria-hidden="true" />
+      <span v-else-if="!error" class="inline-block w-[2px] h-[1em] bg-accent/70 align-text-bottom animate-[cursor-blink_0.9s_step-end_infinite]" aria-hidden="true" />
+
+      <!-- Handled error, kept visually distinct from the answer text -->
+      <div v-if="error" class="mt-2 flex items-start gap-2 rounded-md border border-danger/30 bg-danger/8 px-3 py-2">
+        <span class="font-mono text-[0.7rem] text-danger">{{ error }}</span>
+      </div>
 
       <!-- Sources -->
       <ul v-if="sources?.length" class="mt-3 border-t border-border/60 pt-2.5 text-xs text-muted">

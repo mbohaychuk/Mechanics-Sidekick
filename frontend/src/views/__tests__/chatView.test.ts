@@ -40,7 +40,7 @@ describe('ChatView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Use 5W-30.')          // streamed tokens assembled
-    expect(wrapper.text()).toContain('search_manuals')       // tool chip
+    expect(wrapper.text()).toContain('Searching manuals')    // tool chip (human-readable label)
     expect(wrapper.text()).toContain('m.pdf')                // source citation
   })
 })
