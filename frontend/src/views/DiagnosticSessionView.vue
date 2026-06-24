@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDiagnosticSession } from '@/composables/useDiagnosticSession'
+import { useScannerStore } from '@/stores/scanner'
 import LiveFocusChart from '@/components/LiveFocusChart.vue'
 import DiagnosticStep from '@/components/DiagnosticStep.vue'
 import DiagnosticCoach from '@/components/DiagnosticCoach.vue'
@@ -11,9 +12,12 @@ import HealthReport from '@/components/HealthReport.vue'
 const route = useRoute()
 const vehicleId = Number(route.params.id)
 const d = useDiagnosticSession(vehicleId)
+const scanner = useScannerStore()  // global badge polls this; gate Start on real reachability
 
 onMounted(() => d.loadPastReports())
 onUnmounted(() => d.stop())
+
+const scannerReady = computed(() => !!scanner.status?.scanner_reachable)
 
 const running = computed(() =>
   ['connecting', 'running', 'generating'].includes(d.status.value),
@@ -32,6 +36,7 @@ function statusClass(s: 'good' | 'fair' | 'poor' | 'incomplete' | null): string 
   return s ? { good: 'text-success', fair: 'text-warning', poor: 'text-danger', incomplete: 'text-muted' }[s] : ''
 }
 const activeStep = computed(() => {
+  if (d.status.value === 'generating') return null  // let the Generating card take over the panel
   const s = d.steps.value[d.currentIndex.value]
   return s && s.state === 'active' ? s : null
 })
@@ -40,10 +45,17 @@ const focusSeries = computed(() =>
   vitalNames.value.slice(0, 4).map((name) => ({ name, points: d.series[name] ?? [] })),
 )
 
+function roundSmart(n: number): number {
+  const a = Math.abs(n)
+  if (a >= 100) return Math.round(n)
+  if (a >= 1) return Math.round(n * 10) / 10
+  return Math.round(n * 100) / 100
+}
 function fmt(name: string): string {
   const v = d.latest[name]
   if (!v || v.value === null) return '—'
-  return `${v.value}${v.unit ? ' ' + v.unit : ''}`
+  const val = typeof v.value === 'number' ? roundSmart(v.value) : v.value
+  return `${val}${v.unit ? ' ' + v.unit : ''}`
 }
 function toggle() {
   if (running.value) d.stop()
@@ -67,11 +79,21 @@ function toggle() {
       </div>
       <button
         data-test="start"
-        class="rounded-md border px-4 py-2 font-mono text-xs font-semibold uppercase tracking-widest transition-all duration-150"
+        :disabled="!running && !scannerReady"
+        class="rounded-md border px-4 py-2 font-mono text-xs font-semibold uppercase tracking-widest transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-40"
         :class="running ? 'border-danger/40 bg-danger/10 text-danger hover:bg-danger/20' : 'border-accent/40 bg-accent/10 text-accent hover:bg-accent/20'"
         @click="toggle"
       >{{ running ? 'Stop' : 'Start health check' }}</button>
     </header>
+
+    <p v-if="!running && !scannerReady" class="mb-4 font-mono text-xs text-muted/50">
+      Connect a scanner to start a health check.
+    </p>
+
+    <!-- VIN mismatch — advisory, shown whenever set regardless of run state -->
+    <div v-if="d.vinMismatch.value" class="mb-4 rounded-md border border-warning/30 bg-warning/8 px-4 py-3">
+      <p class="font-mono text-xs text-warning">{{ d.vinMismatch.value }}</p>
+    </div>
 
     <div v-if="d.status.value === 'error'" class="mb-4 rounded-md border border-danger/30 bg-danger/8 px-4 py-3">
       <p class="font-mono text-xs text-danger">{{ d.detail.value }}</p>
@@ -87,7 +109,9 @@ function toggle() {
             <span class="font-mono text-sm tabular-nums" :class="fmt(name) === '—' ? 'text-muted/30' : 'text-accent'">{{ fmt(name) }}</span>
           </li>
           <li v-if="vitalNames.length === 0" class="px-4 py-6 text-center font-mono text-xs text-muted/30">
-            Start the health check to stream live vitals.
+            {{ d.status.value === 'connecting' ? 'Connecting to scanner…'
+              : d.status.value === 'running' ? 'Waiting for live data…'
+              : 'Start the health check to stream live vitals.' }}
           </li>
         </ul>
         <div v-if="focusSeries.length" class="overflow-hidden rounded-card border border-border bg-surface">
@@ -100,6 +124,7 @@ function toggle() {
         <DiagnosticCoach
           v-if="activeStep"
           :label="activeStep.label" :instruction="activeStep.instruction" :progress="d.progress.value"
+          :index="d.currentIndex.value" :total="d.steps.value.length"
         />
 
         <div
@@ -120,7 +145,7 @@ function toggle() {
             v-for="(s, i) in d.steps.value" :key="s.id + i"
             :index="i" :label="s.label" :instruction="s.instruction" :state="s.state" :adhoc="s.adhoc"
           />
-          <p v-if="d.steps.value.length === 0" class="px-4 py-6 text-center font-mono text-xs text-muted/30">No active protocol.</p>
+          <p v-if="d.steps.value.length === 0" class="px-4 py-6 text-center font-mono text-xs text-muted/30">{{ d.status.value === 'connecting' ? 'Connecting…' : 'No active protocol.' }}</p>
         </div>
 
         <div v-if="d.anomalies.value.length" role="log" aria-live="polite" class="overflow-hidden rounded-card border border-border bg-surface">

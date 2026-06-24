@@ -30,6 +30,7 @@ export interface StepProgress {
 export function useDiagnosticSession(vehicleId: number) {
   const status = ref<DiagStatus>('idle')
   const detail = ref('')
+  const vinMismatch = ref('')
   const steps = ref<StepView[]>([])
   const currentIndex = ref(-1)
   const commentary = ref<{ text: string; t: number }[]>([])
@@ -50,7 +51,7 @@ export function useDiagnosticSession(vehicleId: number) {
       steps.value = event.protocol.map((s) => ({
         id: s.id, label: s.label, instruction: s.instruction, state: 'pending', adhoc: false,
       }))
-      if (event.vin_mismatch) detail.value = event.vin_mismatch
+      if (event.vin_mismatch) vinMismatch.value = event.vin_mismatch
     } else if (event.type === 'step') {
       currentIndex.value = event.index
       progress.value = null  // step boundary — clear the live gauge until the next sample
@@ -98,6 +99,7 @@ export function useDiagnosticSession(vehicleId: number) {
     stop()
     status.value = 'connecting'
     detail.value = ''
+    vinMismatch.value = ''
     steps.value = []
     commentary.value = []
     anomalies.value = []
@@ -144,7 +146,7 @@ export function useDiagnosticSession(vehicleId: number) {
   }
 
   return {
-    status, detail, steps, currentIndex, commentary, anomalies, report, latest, series,
+    status, detail, vinMismatch, steps, currentIndex, commentary, anomalies, report, latest, series,
     progress, pastReports, viewedReport, pastError, start, stop, loadPastReports, viewReport,
   }
 }

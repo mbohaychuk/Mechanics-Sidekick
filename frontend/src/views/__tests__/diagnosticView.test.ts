@@ -22,6 +22,7 @@ vi.mock('@/api/client', () => ({
 }))
 
 import DiagnosticSessionView from '@/views/DiagnosticSessionView.vue'
+import { useScannerStore } from '@/stores/scanner'
 import { api } from '@/api/client'
 
 function mountAt(id: string) {
@@ -35,6 +36,8 @@ function mountAt(id: string) {
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  // The Start button is gated on a reachable scanner; mark it connected for these tests.
+  useScannerStore().status = { available: true, scanner_reachable: true, detail: 'Scanner connected.' }
   handlers.current = null
   ;(api.listDiagnosticReports as ReturnType<typeof vi.fn>).mockResolvedValue([])
   ;(api.getDiagnosticSession as ReturnType<typeof vi.fn>).mockReset()

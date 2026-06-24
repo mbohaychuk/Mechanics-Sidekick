@@ -6,7 +6,13 @@ const props = defineProps<{
   label: string
   instruction: string
   progress: StepProgress | null
+  index?: number
+  total?: number
 }>()
+
+const stepCounter = computed(() =>
+  props.index != null && props.total ? `Step ${props.index + 1} of ${props.total}` : '',
+)
 
 const UNIT: Record<string, string> = { RPM: 'rpm', SPEED: 'km/h', COOLANT_TEMP: '°C' }
 
@@ -70,8 +76,10 @@ const dwell = computed(() => {
     <div class="flex items-center gap-2">
       <span class="flex h-2 w-2 rounded-full bg-accent animate-pulse" aria-hidden="true" />
       <span class="font-mono text-[0.6rem] uppercase tracking-widest text-accent">Do this now</span>
+      <span v-if="stepCounter" class="font-mono text-[0.6rem] uppercase tracking-widest text-muted/40">· {{ stepCounter }}</span>
     </div>
-    <p class="mt-2 text-base font-semibold text-text">{{ instruction }}</p>
+    <p v-if="label" class="mt-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/60">{{ label }}</p>
+    <p class="mt-0.5 text-base font-semibold text-text">{{ instruction }}</p>
 
     <template v-if="gauge">
       <!-- live gauge: target band + current-value marker -->
