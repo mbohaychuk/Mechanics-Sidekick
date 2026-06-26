@@ -6,7 +6,7 @@ import logging
 from app.config import Settings
 from app.models.vehicle import Vehicle
 from app.repositories.live_session_repository import LiveSessionRepository
-from app.telemetry.parse import LiveReadError, parse_live_data, parse_vin
+from app.telemetry.parse import LiveReadError, parse_dtcs, parse_live_data, parse_vin
 from app.telemetry.recorder import Recorder
 from app.telemetry.sampler import Subscriber, TelemetrySampler
 
@@ -42,6 +42,20 @@ class TelemetryManager:
             return parse_live_data(await self._host.call_async("read_live_data", {"pids": pids}))
 
         return call_live
+
+    async def read_dtcs(self, make: str | None) -> list[dict] | None:
+        """Read stored + pending DTCs once (a mode-03/07 query). Returns the parsed code list
+        (possibly empty = checked, none found), or None when the read fails — the caller must keep
+        those distinct so a failed read is never shown as a clean all-clear. Advisory: never raises.
+        `make` opts manufacturer-range codes into make-specific decoding."""
+        try:
+            raw = await asyncio.wait_for(
+                self._host.call_async("read_dtcs", {"scope": "all", "make": make}), timeout=10.0
+            )
+            return parse_dtcs(raw)
+        except (LiveReadError, asyncio.TimeoutError, Exception):  # noqa: BLE001 — advisory probe
+            logger.warning("DTC read failed (make=%s); reporting as unavailable", make)
+            return None
 
     async def _vin_mismatch(self, vehicle_id: int) -> tuple[str | None, str | None]:
         """Returns (scanner_vin, mismatch_detail). Advisory only — never raises and never gates

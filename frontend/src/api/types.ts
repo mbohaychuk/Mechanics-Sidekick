@@ -128,6 +128,13 @@ export interface DiagnosticFinding {
   evidence: Record<string, unknown>
 }
 
+export interface TroubleCode {
+  code: string
+  scope: 'stored' | 'pending' | null
+  description: string | null
+  source: 'generic' | 'manufacturer' | 'wire' | null
+}
+
 export interface DiagnosticReport {
   overall_status: 'good' | 'fair' | 'poor' | 'incomplete'
   summary: string

@@ -2,7 +2,13 @@ import json
 
 import pytest
 
-from app.telemetry.parse import LiveReadError, parse_live_data, parse_supported_pids, parse_vin
+from app.telemetry.parse import (
+    LiveReadError,
+    parse_dtcs,
+    parse_live_data,
+    parse_supported_pids,
+    parse_vin,
+)
 
 
 def test_parse_live_data_maps_names_to_value_unit():
@@ -67,6 +73,36 @@ def test_parse_live_data_raises_on_host_sentinel():
     for sentinel in ["[obd unavailable] ...", "[tool error] read_live_data: boom", "[obd error] nope"]:
         with pytest.raises(LiveReadError):
             parse_live_data(sentinel)
+
+
+def test_parse_dtcs_returns_normalized_codes():
+    # read_dtcs returns a single envelope dict {scope, count, codes:[...], timestamp}.
+    text = json.dumps({
+        "scope": "all",
+        "count": 2,
+        "codes": [
+            {"code": "P0706", "scope": "stored", "source": "generic",
+             "description": "Transmission Range Sensor 'A' Circuit Range/Performance"},
+            {"code": "P0707", "scope": "stored", "source": "generic",
+             "description": "Transmission Range Sensor 'A' Circuit Low"},
+        ],
+        "timestamp": 1.0,
+    })
+    out = parse_dtcs(text)
+    assert [c["code"] for c in out] == ["P0706", "P0707"]
+    assert out[0] == {"code": "P0706", "scope": "stored", "source": "generic",
+                      "description": "Transmission Range Sensor 'A' Circuit Range/Performance"}
+
+
+def test_parse_dtcs_empty_when_no_codes():
+    assert parse_dtcs(json.dumps({"scope": "all", "count": 0, "codes": [], "timestamp": 1.0})) == []
+
+
+def test_parse_dtcs_raises_on_host_sentinel():
+    # A read failure must be distinguishable from a genuine "no codes" — so a sentinel raises
+    # (the manager turns that into an "unavailable", never a fabricated all-clear).
+    with pytest.raises(LiveReadError):
+        parse_dtcs("[obd unavailable] The OBD tool server is not running.")
 
 
 def test_parse_supported_pids_and_vin():

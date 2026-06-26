@@ -22,10 +22,13 @@ class FakeHost:
     sampler can stream samples normally.
     """
 
-    def __init__(self, vin="WAUZZZ", available=True, vin_error=False):
+    def __init__(self, vin="WAUZZZ", available=True, vin_error=False, dtcs=None, dtc_error=False):
         self.available = available
         self._vin = vin
         self._vin_error = vin_error
+        self._dtcs = dtcs or []
+        self._dtc_error = dtc_error
+        self.dtc_calls: list[dict] = []
 
     async def call_async(self, name, args):
         if name == "get_vehicle_info":
@@ -34,6 +37,11 @@ class FakeHost:
             return json.dumps({"vin": self._vin})
         if name == "read_live_data":
             return json.dumps([{"name": p, "value": 1, "unit": "x"} for p in args["pids"]])
+        if name == "read_dtcs":
+            self.dtc_calls.append(args)
+            if self._dtc_error:
+                return "[obd unavailable] The OBD tool server is not running."
+            return json.dumps({"scope": "all", "count": len(self._dtcs), "codes": self._dtcs})
         return "[obd error] unknown"
 
 
@@ -100,6 +108,35 @@ def test_vin_mismatch_is_reported_but_not_blocking():
 
     mismatch = asyncio.run(scenario())
     assert mismatch is not None and "SCANNER_VIN" in mismatch
+
+
+def test_read_dtcs_parses_codes_and_passes_make():
+    factory = _factory()
+    settings = Settings(_env_file=None)
+    host = FakeHost(dtcs=[
+        {"code": "P0706", "scope": "stored", "source": "generic", "description": "TR sensor range"},
+        {"code": "P0707", "scope": "stored", "source": "generic", "description": "TR sensor low"},
+    ])
+
+    async def scenario():
+        mgr = TelemetryManager(host, factory, settings)
+        return await mgr.read_dtcs("Ford")
+
+    codes = asyncio.run(scenario())
+    assert [c["code"] for c in codes] == ["P0706", "P0707"]
+    assert host.dtc_calls and host.dtc_calls[0].get("make") == "Ford"
+
+
+def test_read_dtcs_returns_none_on_read_failure():
+    # A failed read must be None (unavailable), NEVER [] — [] means "checked, no codes".
+    factory = _factory()
+    settings = Settings(_env_file=None)
+
+    async def scenario():
+        mgr = TelemetryManager(FakeHost(dtc_error=True), factory, settings)
+        return await mgr.read_dtcs("Ford")
+
+    assert asyncio.run(scenario()) is None
 
 
 def test_second_vehicle_while_active_conflicts():

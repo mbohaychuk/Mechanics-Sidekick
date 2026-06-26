@@ -66,6 +66,22 @@ def parse_supported_pids(text: str) -> list[dict]:
     ]
 
 
+def parse_dtcs(text: str) -> list[dict]:
+    """Normalize the read_dtcs envelope `{scope, count, codes, timestamp}` into a flat list of
+    `{code, scope, description, source}`. Raises LiveReadError on a host sentinel so the caller can
+    tell a read failure apart from a genuine "no codes" (never fabricate an all-clear)."""
+    data = _load(text)
+    codes = data.get("codes") if isinstance(data, dict) else data
+    if not isinstance(codes, list):
+        return []
+    out: list[dict] = []
+    for c in codes:
+        if isinstance(c, dict) and c.get("code"):
+            out.append({"code": c["code"], "scope": c.get("scope"),
+                        "description": c.get("description"), "source": c.get("source")})
+    return out
+
+
 def parse_vin(text: str) -> str | None:
     data = _load(text)
     if isinstance(data, dict):

@@ -97,6 +97,38 @@ describe('useDiagnosticSession', () => {
     expect(d.report.value?.overall_status).toBe('incomplete')
   })
 
+  it('captures trouble codes read at session start', async () => {
+    const d = useDiagnosticSession(1)
+    d.start()
+    await flushPromises()
+    expect(d.codesRead.value).toBeNull()  // not yet read this run
+
+    handlers.current!({
+      type: 'codes', available: true, count: 2,
+      codes: [
+        { code: 'P0706', scope: 'stored', source: 'generic', description: "TR Sensor 'A' Range/Performance" },
+        { code: 'P0707', scope: 'stored', source: 'generic', description: "TR Sensor 'A' Low" },
+      ],
+    })
+    expect(d.codesRead.value).toBe(true)
+    expect(d.codes.value.map((c) => c.code)).toEqual(['P0706', 'P0707'])
+
+    // a fresh run resets the codes state
+    d.start()
+    await flushPromises()
+    expect(d.codes.value).toEqual([])
+    expect(d.codesRead.value).toBeNull()
+  })
+
+  it('marks codes unavailable when the read failed', async () => {
+    const d = useDiagnosticSession(1)
+    d.start()
+    await flushPromises()
+    handlers.current!({ type: 'codes', available: false, count: 0, codes: [] })
+    expect(d.codesRead.value).toBe(false)
+    expect(d.codes.value).toEqual([])
+  })
+
   it('goes to error on an error event', async () => {
     const d = useDiagnosticSession(1)
     d.start()

@@ -11,20 +11,21 @@ from app.diagnostic.anomaly import evaluate, evaluate_window
 logger = logging.getLogger(__name__)
 from app.diagnostic.commentary import summarize_window
 from app.diagnostic.protocol import ProtocolRunner, safe_adhoc_step
-from app.diagnostic.report import HealthReport, report_to_json
+from app.diagnostic.report import Finding, HealthReport, report_to_json
 from app.repositories.diagnostic_session_repository import DiagnosticSessionRepository
 from app.repositories.live_sample_repository import LiveSampleRepository
 
 
 class DiagnosticSessionRunner:
     def __init__(
-        self, manager, session_factory, vehicle_id, vehicle_label, protocol,
+        self, manager, session_factory, vehicle_id, vehicle_label, vehicle_make, protocol,
         commentary, diagnoser_factory, report_builder, settings,
     ) -> None:
         self._manager = manager
         self._session_factory = session_factory
         self._vehicle_id = vehicle_id
         self._vehicle_label = vehicle_label
+        self._vehicle_make = vehicle_make
         self._protocol = protocol
         self._commentary = commentary
         self._diagnoser_factory = diagnoser_factory
@@ -34,6 +35,9 @@ class DiagnosticSessionRunner:
         self._window: list[dict] = []
         self._commentary_log: list[dict] = []
         self._flag_keys: set[str] = set()
+        # None = not read / read failed (keep distinct from [] = read OK, no codes — never
+        # turn a failed read into a fabricated all-clear). Set once at session start.
+        self._dtcs: list[dict] | None = None
 
     def _all_pids(self) -> list[str]:
         pids: set[str] = set()
@@ -69,6 +73,13 @@ class DiagnosticSessionRunner:
             first = self._runner.current()
             if first is not None:
                 yield self._step_event(first)
+
+            # Step 0 of any real diagnosis: pull stored + pending trouble codes once, up front, so
+            # the operator sees them immediately (read AFTER announcing step 1 so a slow adapter read
+            # never delays the coach card). Advisory — a failed read just shows as "unavailable".
+            self._dtcs = await self._manager.read_dtcs(self._vehicle_make)
+            yield {"type": "codes", "available": self._dtcs is not None,
+                   "codes": self._dtcs or [], "count": len(self._dtcs or [])}
 
             last_comment = time.monotonic()
             stall_ticks = 0
@@ -197,10 +208,13 @@ class DiagnosticSessionRunner:
                     for s in LiveSampleRepository(session).list_by_session(live_session_id)
                 ]
 
-            # If not a single guided step was actually completed, the operator never held a test
-            # condition — there is no valid data to interpret. Report "incomplete" honestly (never
-            # a default "good"), and skip the LLM report call entirely.
-            if not any(s.state == "done" for s in self._runner.completed):
+            steps_done = any(s.state == "done" for s in self._runner.completed)
+            read_failed = self._dtcs is None  # None = read failed; [] = read OK, no codes
+
+            # Truly nothing to interpret: no guided step was held AND the code read also failed.
+            # Report "incomplete" honestly (never a default "good") and skip the LLM. A successful
+            # read — even a clean one ([]) — is a real result, so it takes us past this guard.
+            if not steps_done and read_failed:
                 report = HealthReport(
                     overall_status="incomplete",
                     summary="The health check didn't complete a single guided step, so there isn't "
@@ -217,8 +231,26 @@ class DiagnosticSessionRunner:
                 session.commit()
                 return report_json
 
-            good_systems, diagnoses = self._analyze(session, recorded)
-            report = self._report_builder.build(self._vehicle_label, good_systems, diagnoses)
+            diagnoser = self._diagnoser_factory(session)
+            dtc_findings = [diagnoser.diagnose_code(c, self._vehicle_label) for c in (self._dtcs or [])]
+            # Without a held step we have no live data to call any system "good".
+            good_systems, diagnoses = self._analyze(diagnoser, recorded) if steps_done else ({}, [])
+
+            # Carry the DTC read OUTCOME into the durable report, not just the live stream — the
+            # None/[] distinction must survive here too. A failed read becomes a warn finding so the
+            # report can never read as a clean all-clear for a scan that silently failed; a clean
+            # read is stated explicitly as a good system.
+            extra: list[Finding] = []
+            if read_failed:
+                extra.append(Finding(
+                    system="codes", severity="warn",
+                    observation="Couldn't read stored or pending trouble codes from the scanner; "
+                                "this report does not reflect a DTC scan.",
+                ))
+            elif self._dtcs == []:
+                good_systems = {**good_systems, "codes": "No stored or pending trouble codes."}
+            report = self._report_builder.build(
+                self._vehicle_label, good_systems, dtc_findings + extra + diagnoses)
             report_json = report_to_json(report)
             DiagnosticSessionRepository(session).complete(
                 diag_id, overall_status=report.overall_status, summary=report.summary,
@@ -230,7 +262,7 @@ class DiagnosticSessionRunner:
         finally:
             session.close()
 
-    def _analyze(self, session, recorded) -> tuple[dict, list]:
+    def _analyze(self, diagnoser, recorded) -> tuple[dict, list]:
         # v1 always analyzes the full authoritative recording fetched from the DB, not subsets
         # bounded by each step's seq_start/seq_end — those ranges are tracked but reserved for
         # future per-step drill-down analysis and are not load-bearing here.
@@ -242,7 +274,6 @@ class DiagnosticSessionRunner:
                     seen.add(f"{f.system}:{f.pid}")
                     flags.append(f)
 
-        diagnoser = self._diagnoser_factory(session)
         diagnoses = [diagnoser.diagnose(f, self._vehicle_label) for f in flags]
 
         flagged_systems = {f.system for f in flags}

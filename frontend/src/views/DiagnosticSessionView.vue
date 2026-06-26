@@ -139,6 +139,35 @@ function toggle() {
           </div>
         </div>
 
+        <div
+          v-if="d.codesRead.value !== null"
+          data-test="codes"
+          class="overflow-hidden rounded-card border border-border bg-surface"
+        >
+          <div class="border-b border-border/50 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">
+            Trouble codes
+          </div>
+          <p v-if="d.codesRead.value === false" class="px-4 py-3 text-xs text-warning">
+            Couldn't read trouble codes from the scanner.
+          </p>
+          <p v-else-if="d.codes.value.length === 0" class="px-4 py-3 text-xs text-success">
+            No stored or pending trouble codes.
+          </p>
+          <div
+            v-for="c in d.codes.value" :key="c.code"
+            class="flex items-start gap-3 border-b border-border/50 px-4 py-2.5 last:border-b-0"
+          >
+            <span
+              class="shrink-0 rounded-md border px-2 py-0.5 font-mono text-xs font-semibold"
+              :class="c.scope === 'pending' ? 'border-warning/40 bg-warning/10 text-warning' : 'border-danger/40 bg-danger/10 text-danger'"
+            >{{ c.code }}</span>
+            <span class="min-w-0 text-xs text-text/80">
+              {{ c.description ?? 'No description available.' }}
+              <span v-if="c.scope === 'pending'" class="ml-1 font-mono text-[0.6rem] uppercase tracking-widest text-warning/70">pending</span>
+            </span>
+          </div>
+        </div>
+
         <div class="overflow-hidden rounded-card border border-border bg-surface">
           <div class="border-b border-border/50 px-4 py-2 font-mono text-[0.65rem] uppercase tracking-widest text-muted/50">Guided steps</div>
           <DiagnosticStep

@@ -93,6 +93,7 @@ def make_diagnostic_runner(session_factory, settings: Settings, manager, host, v
         if vehicle is None:
             return None
         vehicle_label = f"{vehicle.year} {vehicle.make} {vehicle.model}, engine {vehicle.engine}"
+        vehicle_make = vehicle.make
     finally:
         s.close()
 
@@ -117,6 +118,7 @@ def make_diagnostic_runner(session_factory, settings: Settings, manager, host, v
         session_factory=session_factory,
         vehicle_id=vehicle_id,
         vehicle_label=vehicle_label,
+        vehicle_make=vehicle_make,
         protocol=get_protocol(protocol_name),
         commentary=CommentaryGenerator(provider, settings),
         diagnoser_factory=diagnoser_factory,

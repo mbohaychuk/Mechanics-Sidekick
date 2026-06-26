@@ -59,3 +59,23 @@ def test_no_web_client_is_safe():
     d = Diagnoser(FakeRetrieval(score=0.1), FakeDocRepo(), None, vehicle_id=1, settings=S)
     finding = d.diagnose(_flag(), "2004 Audi A8")
     assert finding.evidence["web_text"] == ""
+
+
+def test_diagnose_code_stored_is_a_fail_finding_grounded_in_the_manual():
+    d = Diagnoser(FakeRetrieval(score=0.8), FakeDocRepo(), FakeWeb(), vehicle_id=1, settings=S)
+    dtc = {"code": "P0706", "scope": "stored", "source": "generic",
+           "description": "Transmission Range Sensor 'A' Circuit Range/Performance"}
+    finding = d.diagnose_code(dtc, "2015 Ford F-150")
+    assert finding.system == "P0706"          # per-code system → unique key, renders as the code chip
+    assert finding.severity == "fail"          # a stored code is a confirmed fault
+    assert "P0706" in finding.observation and "Transmission Range Sensor" in finding.observation
+    assert finding.evidence["sources"][0]["filename"] == "service.pdf"
+    assert finding.evidence["code"] == "P0706"
+
+
+def test_diagnose_code_pending_is_a_warn():
+    d = Diagnoser(FakeRetrieval(score=0.8), FakeDocRepo(), None, vehicle_id=1, settings=S)
+    dtc = {"code": "P0420", "scope": "pending", "source": "generic",
+           "description": "Catalyst System Efficiency Below Threshold (Bank 1)"}
+    finding = d.diagnose_code(dtc, "2015 Ford F-150")
+    assert finding.severity == "warn"          # pending = not yet confirmed

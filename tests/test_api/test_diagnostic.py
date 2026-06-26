@@ -24,6 +24,11 @@ class _FakeHost:
                 {"name": p, "value": (700 if p == "RPM" else (14 if "FUEL_TRIM" in p else 88)), "unit": "x"}
                 for p in args["pids"]
             ])
+        if name == "read_dtcs":
+            return json.dumps({"scope": "all", "count": 1, "codes": [
+                {"code": "P0706", "scope": "stored", "source": "generic",
+                 "description": "Transmission Range Sensor 'A' Circuit Range/Performance"},
+            ]})
         return "[obd error] unknown"
 
 
@@ -127,6 +132,16 @@ async def test_diagnostic_stream_runs_and_persists(tmp_path, monkeypatch):
     types = [e["type"] for e in events]
     assert types[0] == "session"
     assert "report" in types and types[-1] == "done"
+
+    # Step 0: the stored code is read up front, emitted as a `codes` event...
+    codes_ev = next(e for e in events if e["type"] == "codes")
+    assert codes_ev["available"] is True and codes_ev["count"] == 1
+    assert codes_ev["codes"][0]["code"] == "P0706"
+    # ...and folded into the health report as its own finding (severity fail, keyed by the code).
+    report_ev = next(e for e in events if e["type"] == "report")
+    p0706 = next(f for f in report_ev["findings"] if f["system"] == "P0706")
+    assert p0706["severity"] == "fail" and "P0706" in p0706["observation"]
+    assert report_ev["overall_status"] == "poor"  # a stored fault → overall poor
 
     f = app.state.session_factory
     s = f()

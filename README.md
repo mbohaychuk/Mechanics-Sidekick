@@ -16,7 +16,8 @@ Workflow: **Vehicle → Documents → Job → Chat**
 4. **Chat.** The assistant is **agentic** — it decides which tools to call as it reasons, and can chain them (read a code → look it up in the manual) in a single turn:
    - **📖 `search_manuals`** — semantic search over *this vehicle's* uploaded manuals, cited by filename + page.
    - **🔧 OBD tools** — read live data, trouble codes (DTCs), freeze frames, readiness monitors, and vehicle info straight from the connected car, via the separate [obd‑mcp](https://github.com/mbohaychuk/OBD-II-MCP-Server) server. **Read‑only** — the destructive clear‑codes tool is filtered out of the toolset entirely.
-   - **🔎 `web_search`** — the public web (recalls, TSBs, common failure patterns) when the manuals don't cover it.
+   - **🛟 `get_recalls`** — official **NHTSA** safety recalls for this vehicle (by year/make/model) — useful on its own, and when a fault or DTC could be recall‑related.
+   - **🔎 `web_search`** — the public web (TSBs, common failure patterns) when the manuals don't cover it.
 
 Answers stream token‑by‑token over SSE; tool activity appears as live chips; manual citations show the source filename and page.
 
@@ -26,7 +27,7 @@ Open a vehicle's **Live** view to stream its sensor data (PIDs — RPM, coolant 
 
 ### Diagnostic copilot session
 
-Open a vehicle's **Diagnostic** view to run a guided health test. The copilot walks you through a protocol (idle → warm‑up → rev to ~2500 → return to idle), detecting each step from the live telemetry; it narrates the data with periodic LLM commentary, flags anomalies with deterministic rules, and at the end generates a **structured health report** — per‑system findings (severity, observation, recommendation) grounded in your manuals (and the web where they fall short), saved and reviewable. The LLM's autonomy is deliberately bounded: it interprets and may adapt a step within a fixed, validated vocabulary, but the protocol detection and anomaly rules are deterministic. The chat agent can then **reference past health reports** when you ask about the vehicle's condition or history.
+Open a vehicle's **Diagnostic** view to run a guided health test. Like a real scan‑tool diagnosis, it **starts by reading the stored and pending trouble codes** off the scanner — each code decoded (generic vs. manufacturer‑range, resolved against the VIN‑decoded make) and shown up front. It then walks you through a protocol (idle → warm‑up → rev to ~2500 → return to idle), detecting each step from the live telemetry; it narrates the data with periodic LLM commentary, flags anomalies with deterministic rules, and at the end generates a **structured health report** — per‑system findings (severity, observation, recommendation) grounded in your manuals (and the web where they fall short), saved and reviewable. **The trouble codes are folded into that report as first‑class findings** (each looked up in the manual), so a stored fault drives the overall status — and an honest one: a failed code read is flagged rather than shown as a clean all‑clear, and a clean read is stated explicitly. The LLM's autonomy is deliberately bounded: it interprets and may adapt a step within a fixed, validated vocabulary, but the protocol detection and anomaly rules are deterministic. The chat agent can then **reference past health reports** when you ask about the vehicle's condition or history.
 
 ---
 
@@ -43,7 +44,8 @@ Two processes, one experience:
 ```
 Browser (Vue SPA) ──/api──▶ FastAPI ──┬─ agent loop (OpenAI tool-calling)
                                        │    ├─ search_manuals          → RAG over SQLite
-                                       │    ├─ obd-mcp (stdio)          → live OBD-II data
+                                       │    ├─ obd-mcp (stdio)          → live OBD-II data + DTCs
+                                       │    ├─ get_recalls              → NHTSA recalls
                                        │    ├─ web_search               → Tavily
                                        │    └─ get_diagnostic_reports   → past health reports
                                        ├─ telemetry sampler ──SSE──▶ Live dashboard  (recorded to SQLite)
@@ -229,5 +231,5 @@ Deliberate v1 tradeoffs in the RAG layer, each a clear next step:
 - **Brute‑force vector search.** All of a vehicle's chunk embeddings are loaded from SQLite and scored in Python per query. Fine for a typical corpus; a vector store ([Chroma](https://www.trychroma.com/) / [Qdrant](https://qdrant.tech/)) would make retrieval instant at scale.
 - **Embeddings stored as JSON strings** (not binary), paying a `json.loads` per chunk per query — ripe for numpy‑matrix caching.
 - **Fixed word‑count chunking** ignores document structure; structure‑aware or parent‑child chunking would produce more coherent chunks for spec tables and multi‑step procedures.
-- **No reranking.** A cross‑encoder reranker after initial retrieval would improve answers on ambiguous, multi‑part questions.
+- **Reranking + hybrid search are opt‑in, not on by default.** Both ship (`RERANK_PROVIDER=local`, `HYBRID_SEARCH=true`) and are measured by the eval harness, but stay off by default pending broader validation across corpora.
 - **Vehicle‑scoped retrieval, not job‑scoped** — every question searches all of a vehicle's manuals.

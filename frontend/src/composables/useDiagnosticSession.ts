@@ -1,7 +1,7 @@
 import { ref, reactive } from 'vue'
 import { streamDiagnostic, type DiagnosticStreamEvent } from '@/api/diagnosticStream'
 import { api } from '@/api/client'
-import type { DiagnosticReport, DiagnosticReportSummary, LiveValue } from '@/api/types'
+import type { DiagnosticReport, DiagnosticReportSummary, LiveValue, TroubleCode } from '@/api/types'
 
 const WINDOW = 120
 
@@ -35,6 +35,8 @@ export function useDiagnosticSession(vehicleId: number) {
   const currentIndex = ref(-1)
   const commentary = ref<{ text: string; t: number }[]>([])
   const progress = ref<StepProgress | null>(null)
+  const codes = ref<TroubleCode[]>([])
+  const codesRead = ref<boolean | null>(null)  // null = not read yet, true = read OK, false = read failed
   const anomalies = ref<{ system: string; severity: string; detail: string }[]>([])
   const report = ref<DiagnosticReport | null>(null)
   const pastReports = ref<DiagnosticReportSummary[]>([])
@@ -68,6 +70,9 @@ export function useDiagnosticSession(vehicleId: number) {
         target_low: event.target_low, target_high: event.target_high, in_range: event.in_range,
         dwell_elapsed_s: event.dwell_elapsed_s, dwell_required_s: event.dwell_required_s,
       }
+    } else if (event.type === 'codes') {
+      codes.value = event.codes
+      codesRead.value = event.available
     } else if (event.type === 'sample') {
       for (const [pid, v] of Object.entries(event.values)) {
         latest[pid] = v
@@ -102,6 +107,8 @@ export function useDiagnosticSession(vehicleId: number) {
     vinMismatch.value = ''
     steps.value = []
     commentary.value = []
+    codes.value = []
+    codesRead.value = null
     anomalies.value = []
     report.value = null
     viewedReport.value = null
@@ -147,6 +154,7 @@ export function useDiagnosticSession(vehicleId: number) {
 
   return {
     status, detail, vinMismatch, steps, currentIndex, commentary, anomalies, report, latest, series,
-    progress, pastReports, viewedReport, pastError, start, stop, loadPastReports, viewReport,
+    progress, codes, codesRead, pastReports, viewedReport, pastError, start, stop, loadPastReports,
+    viewReport,
   }
 }

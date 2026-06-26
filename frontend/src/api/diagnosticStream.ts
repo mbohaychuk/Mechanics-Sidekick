@@ -1,9 +1,10 @@
 import { consumeSseStream } from '@/api/sse'
-import type { DiagnosticReport, LiveValue } from '@/api/types'
+import type { DiagnosticReport, LiveValue, TroubleCode } from '@/api/types'
 
 export type DiagnosticStreamEvent =
   | { type: 'session'; diagnostic_session_id: number; live_session_id: number;
       protocol: { id: string; label: string; instruction: string }[]; vin_mismatch?: string }
+  | { type: 'codes'; available: boolean; codes: TroubleCode[]; count: number }
   | { type: 'sample'; seq: number; t: number; hz: number; values: Record<string, LiveValue | null> }
   | { type: 'step'; index: number; total: number; id: string; label: string;
       instruction: string; state: 'active' | 'done' | 'skipped'; adhoc: boolean }
