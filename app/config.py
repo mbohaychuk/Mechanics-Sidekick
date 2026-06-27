@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     hybrid_search: bool = False          # fuse BM25 (FTS5) keyword ranks with cosine via RRF
     rrf_k: int = 60                      # Reciprocal Rank Fusion constant
     openai_api_key: str = ""
-    openai_chat_model: str = "gpt-4.1-mini"
+    openai_chat_model: str = "gpt-5.4"
     openai_embed_model: str = "text-embedding-3-small"
     api_host: str = "127.0.0.1"
     api_port: int = 8000

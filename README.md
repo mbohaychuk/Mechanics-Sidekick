@@ -62,7 +62,7 @@ Browser (Vue SPA) ──/api──▶ FastAPI ──┬─ agent loop (OpenAI to
 | Frontend | Vue 3 + TypeScript, Vite, Tailwind CSS v4, Pinia, vue‑router, Vitest |
 | Backend | FastAPI + Uvicorn (SSE streaming) |
 | Agent | Custom tool‑calling loop over the OpenAI SDK + the official MCP Python SDK (the `obd‑mcp` client) |
-| LLM & embeddings | OpenAI (`gpt-4.1-mini`, `text-embedding-3-small`) — Ollama retained behind a provider seam for a future local option |
+| LLM & embeddings | OpenAI (`gpt-5.4`, `text-embedding-3-small`) — Ollama retained behind a provider seam for a future local option |
 | Web search | Tavily |
 | Live vehicle data | `obd‑mcp` (separate project) over MCP / stdio |
 | PDF extraction | PyMuPDF |
@@ -137,7 +137,7 @@ Defaults work out of the box once `OPENAI_API_KEY` is set. Override anything via
 | Variable | Default | Purpose |
 |---|---|---|
 | `OPENAI_API_KEY` | — | OpenAI key for chat + embeddings |
-| `OPENAI_CHAT_MODEL` | `gpt-4.1-mini` | Tool‑capable chat model |
+| `OPENAI_CHAT_MODEL` | `gpt-5.4` | Tool‑capable chat model |
 | `OPENAI_EMBED_MODEL` | `text-embedding-3-small` | Embedding model (1536‑dim) |
 | `LLM_PROVIDER` / `EMBED_PROVIDER` | `openai` | Provider behind the seam (`openai` or `ollama`) |
 | `MAX_AGENT_ITERS` | `6` | Cap on tool‑calling loop iterations per turn |

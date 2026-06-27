@@ -17,7 +17,7 @@ def test_settings_have_openai_and_api_defaults():
     s = Settings(_env_file=None)
     assert s.llm_provider == "openai"
     assert s.embed_provider == "openai"
-    assert s.openai_chat_model == "gpt-4.1-mini"
+    assert s.openai_chat_model == "gpt-5.4"
     assert s.openai_embed_model == "text-embedding-3-small"
     assert s.openai_api_key == ""
     assert s.api_host == "127.0.0.1"

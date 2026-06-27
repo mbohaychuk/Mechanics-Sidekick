@@ -25,7 +25,7 @@ def test_openai_providers_selected_by_default():
     assert isinstance(emb._backend, OpenAIService)
     assert isinstance(ctx._backend, OpenAIService)
     assert emb._model == "text-embedding-3-small"
-    assert ctx._model == "gpt-4.1-mini"
+    assert ctx._model == "gpt-5.4"
 
 
 def test_ollama_selected_when_configured():
